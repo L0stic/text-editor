@@ -1,2 +1,2 @@
 # TextEditor
-Simple text editor
+Simple text editor on C, WinAPI
