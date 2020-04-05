@@ -11,6 +11,8 @@
 #include <stdio.h>
 
 #include "Menu.h"
+#include "Document.h"
+#include "String.h"
 
 /*  Declare Windows procedure  */
 LRESULT CALLBACK WindowProcedure(HWND, UINT, WPARAM, LPARAM);
@@ -20,16 +22,16 @@ const TCHAR szTitle[]       = _T("FileName - TextEdit");
 
 int WINAPI WinMain(HINSTANCE hThisInstance, HINSTANCE hPrevInstance,
                    LPSTR lpszArgument, int nCmdShow) {
-    HWND hwnd;        /* This is the handle for our window */
-    MSG messages;     /* Here messages to the application are saved */
-    WNDCLASSEX wincl; /* Data structure for the windowclass */
+    HWND        hwnd;       /* This is the handle for our window */
+    MSG         messages;   /* Here messages to the application are saved */
+    WNDCLASSEX  wincl;      /* Data structure for the windowclass */
 
     /* The Window structure */
-    wincl.hInstance = hThisInstance;
+    wincl.hInstance     = hThisInstance;
     wincl.lpszClassName = szClassName;
-    wincl.lpfnWndProc = WindowProcedure; /* This function is called by windows */
-    wincl.style = CS_HREDRAW | CS_VREDRAW;
-    wincl.cbSize = sizeof(WNDCLASSEX);
+    wincl.lpfnWndProc   = WindowProcedure; /* This function is called by windows */
+    wincl.style         = CS_HREDRAW | CS_VREDRAW;
+    wincl.cbSize        = sizeof(WNDCLASSEX);
 
     /* Use default icon and mouse-pointer */
     wincl.hIcon = LoadIcon(NULL, IDI_APPLICATION);
@@ -44,10 +46,11 @@ int WINAPI WinMain(HINSTANCE hThisInstance, HINSTANCE hPrevInstance,
 
     /* Register the window class, and if it fails quit the program */
     if (!RegisterClassEx(&wincl)) {
+        printf("All is so bad: application failed\n");
         return 0;
     }
 
-    /* The class is registered, let's create the program*/
+    /* The class is registered, let's create the program */
     hwnd = CreateWindowEx(
         0,              /* Extended possibilites for variation */
         szClassName,    /* Classname */
@@ -65,6 +68,7 @@ int WINAPI WinMain(HINSTANCE hThisInstance, HINSTANCE hPrevInstance,
 
     /* Make the window visible on the screen */
     ShowWindow(hwnd, nCmdShow);
+    // UpdateWindow(hwnd);
 
     /* Run the message loop. It will run until GetMessage() returns 0 */
     while (GetMessage(&messages, NULL, 0, 0)) {
@@ -116,13 +120,57 @@ BOOL FileOpenDlg(HWND hwnd, OPENFILENAME* ofn, PSTR pstrFileName) {
     return GetOpenFileName(ofn);
 }
 
+static const char* example = "example.txt";
+
 /*  This function is called by the Windows function DispatchMessage()  */
 LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
     static OPENFILENAME ofn;
     static PSTR pstrFilename;
 
+    static size_t cxChar, cyChar;
+    static Document* doc = NULL;
+
+    HDC         hdc;
+    PAINTSTRUCT ps;
+    TEXTMETRIC tm;
+    // RECT        rect;
+
     /* handle the messages */
     switch (message) {
+    case WM_CREATE:
+        doc = CreateDocument(example);
+        if (!doc) { printf("All is so bad"); }
+        PrintString(doc->text);
+        printf("%i", doc->text->len);
+
+        hdc = GetDC(hwnd);
+
+        GetTextMetrics(hdc, &tm);
+        cxChar = (size_t)tm.tmAveCharWidth;
+        cyChar = (size_t)tm.tmHeight + tm.tmExternalLeading;
+
+        ReleaseDC(hwnd, hdc);
+        break;
+    // WM_CREATE
+
+    case WM_PAINT:
+        hdc = BeginPaint(hwnd, &ps);
+        if (doc) {
+            size_t printCount;
+            size_t numRow = (doc->text->len / cxChar + ((doc->text->len % cxChar) ? 1 : 0));
+
+            for (size_t i = 0, j = 0; i < numRow; ++i, ++j) {
+                printCount = (numRow - 1) == i ? doc->text->len % cxChar : cxChar;
+                TextOut(hdc, 0, j * cyChar, doc->text->data + i * cxChar, printCount);
+            }
+        }
+
+        //GetClientRect(hwnd, &rect);
+        //DrawText(hdc, "Hello, Windows 10!!!", -1, &rect, DT_SINGLELINE | DT_CENTER | DT_VCENTER);
+        EndPaint(hwnd, &ps);
+        break;
+    // WM_PAINT
+
     case WM_COMMAND:
         switch (LOWORD(wParam)) {
         case IDM_FILE_OPEN:
@@ -142,7 +190,8 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
 
         case IDM_FILE_EXIT:
             printf("Exit is activated\n");
-            //DestroyTextModel(&model);
+            if (doc) { DestroyDocument(&doc); }
+
             PostMessage(hwnd, WM_CLOSE, 0, 0);
             break;
 
