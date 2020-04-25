@@ -35,25 +35,22 @@ static int SetString(String* str, const char* src) {
     assert(str && src);
 
     str->len = strlen(src);
-    str->size = DIV_WITH_ROUND_UP(str->len, BASE_STRING_SIZE);
-    str->size *= BASE_STRING_SIZE;
+    if (str->len > 0) {
+        str->size = DIV_WITH_ROUND_UP(str->len, BASE_STRING_SIZE);
+        str->size *= BASE_STRING_SIZE;
 
-    str->data = malloc(str->size * sizeof(char));
+        str->data = malloc(str->size * sizeof(char));
+        if (!str->data) { return -1; }
 
-    if (str->data) {
         strncpy(str->data, src, str->len);
-        return 0;
     }
-    return -1;
+    return str->len;
 }
 
 // обработать ошибки
 String* CreateString(const char* src) {
     String* str = calloc(1, sizeof(String));
-    if (!str) { return NULL; }
-
-    if (src) { SetString(str, src); }
-
+    if (str && src) { SetString(str, src); }
     return str;
 }
 
@@ -79,17 +76,19 @@ int AddString(String* str, const char* src) {
 
             strncpy(str->data + oldLen, src, str->len - oldLen);
         }
-        return 0;
+        return str->len - oldLen;
     }
 
     return SetString(str, src);
 }
 
-size_t PrintString(const String* str) {
+size_t PrintString(FILE* output, const String* str) {
     assert(str && str->data);
 
+    if (!output) { output = stdout; }
+
     for (size_t i = 0; i < str->len; ++i) {
-        fputchar(str->data[i]);
+        fputc(str->data[i], output);
     }
 
     return str->len;

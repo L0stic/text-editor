@@ -10,6 +10,7 @@
 
 #include <stdio.h>
 
+#include "Error.h"
 #include "Menu.h"
 #include "Document.h"
 #include "String.h"
@@ -19,6 +20,7 @@ LRESULT CALLBACK WindowProcedure(HWND, UINT, WPARAM, LPARAM);
 
 const TCHAR szClassName[]   = _T("TextEdit");
 const TCHAR szTitle[]       = _T("FileName - TextEdit");
+const char* example = "example.txt";
 
 int WINAPI WinMain(HINSTANCE hThisInstance, HINSTANCE hPrevInstance,
                    LPSTR lpszArgument, int nCmdShow) {
@@ -46,8 +48,8 @@ int WINAPI WinMain(HINSTANCE hThisInstance, HINSTANCE hPrevInstance,
 
     /* Register the window class, and if it fails quit the program */
     if (!RegisterClassEx(&wincl)) {
-        printf("All is so bad: application failed\n");
-        return 0;
+        PrintError(NULL, ERR_UNKNOWN, __FILE__, __LINE__);
+        return ERR_UNKNOWN;
     }
 
     /* The class is registered, let's create the program */
@@ -101,7 +103,7 @@ void InitOpenFilename(HWND hwnd, OPENFILENAME* ofn) {
     ofn->nMaxFileTitle      = _MAX_FNAME + _MAX_EXT;
     ofn->lpstrInitialDir    = NULL;
     ofn->lpstrTitle         = NULL;
-    ofn->Flags              = 0; // Set in Open and Close functions
+    ofn->Flags              = 0;    // Set in Open and Close functions
     ofn->nFileOffset        = 0;
     ofn->nFileExtension     = 0;
     ofn->lpstrDefExt        = _T("txt");
@@ -120,19 +122,20 @@ BOOL FileOpenDlg(HWND hwnd, OPENFILENAME* ofn, PSTR pstrFileName) {
     return GetOpenFileName(ofn);
 }
 
-static const char* example = "example.txt";
-
 /*  This function is called by the Windows function DispatchMessage()  */
 LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
     static OPENFILENAME ofn;
     static PSTR pstrFilename;
 
     static size_t cxChar, cyChar;
+    static size_t cxClient, cyClient;
+    static size_t numRow;
+
     static Document* doc = NULL;
 
     HDC         hdc;
     PAINTSTRUCT ps;
-    TEXTMETRIC tm;
+    TEXTMETRIC  tm;
     // RECT        rect;
 
     /* handle the messages */
@@ -140,8 +143,12 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
     case WM_CREATE:
         doc = CreateDocument(example);
         if (!doc) { printf("All is so bad"); }
-        PrintString(doc->text);
-        printf("%i", doc->text->len);
+
+        // for debuging
+        PrintDocumentParameters(NULL, doc);
+        //PrintString(NULL, doc->text);
+        //putchar('\n');
+        PrintDocument(NULL, doc);
 
         hdc = GetDC(hwnd);
 
@@ -153,15 +160,28 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
         break;
     // WM_CREATE
 
+    case WM_SIZE:
+        cxClient = LOWORD(lParam);
+        cyClient = HIWORD(lParam);
+
+        // numRow = (doc->text->len / cxChar + ((doc->text->len % cxChar) ? 1 : 0));
+
+        if (doc->text->len > 0) {
+            numRow = min(doc->blocks->len, cyClient / cyChar);
+        } else {
+            numRow = 0;
+        }
+        break;
+    // WM_SIZE
+
     case WM_PAINT:
         hdc = BeginPaint(hwnd, &ps);
         if (doc) {
-            size_t printCount;
-            size_t numRow = (doc->text->len / cxChar + ((doc->text->len % cxChar) ? 1 : 0));
+            Block* block = doc->blocks->nodes;
 
             for (size_t i = 0, j = 0; i < numRow; ++i, ++j) {
-                printCount = (numRow - 1) == i ? doc->text->len % cxChar : cxChar;
-                TextOut(hdc, 0, j * cyChar, doc->text->data + i * cxChar, printCount);
+                TextOut(hdc, 0, i * cyChar, doc->text->data + block->data.pos, block->data.len);
+                block = block->next;
             }
         }
 

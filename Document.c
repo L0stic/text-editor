@@ -16,6 +16,14 @@ static void SetText(Document* doc, String** text) {
     *text = NULL;
 }
 
+static void SetBlocks(Document* doc, ListBlock** blocks) {
+    assert(doc && blocks && *blocks);
+
+    if (doc->blocks) { DestroyListBlock(&(doc->blocks)); }
+    doc->blocks = *blocks;
+    *blocks = NULL;
+}
+
 static char* GetUntitledTittle() {
     const char* title = UNTITLED_TITLE;
     char* tmp = malloc((strlen(title) + 1) * sizeof(char));
@@ -84,41 +92,80 @@ int SetFile(Document* doc, const char* filename) {
         return -2;
     }
 
+    ListBlock* blocks = CreateListBlock();
+    if (!blocks) {
+        fclose(file);
+        return -3;
+    }
+
     String* text = CreateString(NULL);
     if (!text) {
+        DestroyListBlock(&blocks);
         fclose(file);
         return -3;
     }
 
     if (ReserveSize(text, (size_t)size)) {
+        DestroyListBlock(&blocks);
         DestroyString(&text);
         fclose(file);
         return -4;
     }
 
     // Scaning
-    char* buffer = malloc(BASE_STRING_SIZE * sizeof(char));
+    char* buffer = malloc((BASE_STRING_SIZE + 1) * sizeof(char));
     if (!buffer) {
+        DestroyListBlock(&blocks);
         DestroyString(&text);
         fclose(file);
         return -5;
     }
 
     // TODO: add error-handler
-    while(!feof(file)) {
-        if (fgets(buffer, BASE_STRING_SIZE, file)) { AddString(text, buffer); }
+    for (size_t blockLen = 0; !feof(file); ) {
+        if (fgets(buffer, BASE_STRING_SIZE + 1, file)) {
+            size_t len = strlen(buffer);
+
+            blockLen += len;
+
+            if (len > 0 && buffer[len - 1] == '\n') {
+                size_t pos = blocks->last ? blocks->last->data.pos + blocks->last->data.len : 0;
+                BlockData_t blockData = {blockLen - 1, pos, NULL};
+
+                if (AddBlockData(blocks, blockData)) {
+                    DestroyListBlock(&blocks);
+                    DestroyString(&text);
+                    free(buffer);
+                    fclose(file);
+                    return -6;
+                }
+
+                blockLen = 0;
+                buffer[len - 1] = '\0';
+            }
+
+            if (AddString(text, buffer) < 0) {
+                DestroyListBlock(&blocks);
+                DestroyString(&text);
+                free(buffer);
+                fclose(file);
+                return -7;
+            }
+        }
     }
     free(buffer);
     fclose(file);
 
     char* title = GetTitle(filename);
     if (!title) {
+        DestroyListBlock(&blocks);
         DestroyString(&text);
-        return -6;
+        return -8;
     }
 
-    SetText(doc, &text);
     SetTitle(doc, &title);
+    SetText(doc, &text);
+    SetBlocks(doc, &blocks);
     return 0;
 }
 
@@ -139,9 +186,54 @@ Document* CreateDocument(const char* filename) {
 void DestroyDocument(Document** ppDoc) {
     assert(ppDoc && *ppDoc);
 
-    if ((*ppDoc)->title) { free((*ppDoc)->title); }
-    if ((*ppDoc)->text) { DestroyString(&((*ppDoc)->text)); }
+    Document* pDoc = *ppDoc;
+    if (pDoc->title) { free(pDoc->title); }
+    if (pDoc->text) { DestroyString(&(pDoc->text)); }
+    if (pDoc->blocks) { DestroyListBlock(&(pDoc->blocks)); }
 
-    free(*ppDoc);
+    free(pDoc);
     *ppDoc = NULL;
+}
+
+size_t PrintDocument(FILE* output, const Document* doc) {
+    assert(doc);
+    size_t counter = 0;
+
+    if (!output) { output = stdout; }
+
+    for (Block* block = doc->blocks->nodes; block; block = block->next) {
+        for (size_t i = 0; i < block->data.len; ++i) {
+            fputc(doc->text->data[block->data.pos + i], output);
+            ++counter;
+        }
+        fputc('\n', output);
+        ++counter;
+    }
+
+    return counter;
+}
+
+void PrintDocumentParameters(FILE* output, const Document* doc) {
+    assert(doc);
+    const char* null = "NULL";
+
+    if (!output) { output = stdout; }
+
+    fprintf(output, "Document's parameters:\n");
+    
+    fprintf(output, "\tTitle: %s\n", doc->title ? doc->title : null);
+    
+    fprintf(output, "\tText: "); 
+    if (doc->text) {
+        fprintf(output, "len = %u, size = %u\n", doc->text->len, doc->text->size);
+    } else {
+        fprintf(output, "%s\n", null);
+    }
+
+    fprintf(output, "\tBlocks: "); 
+    if (doc->text) {
+        fprintf(output, "len = %u\n", doc->blocks->len);
+    } else {
+        fprintf(output, "%s\n", null);
+    }
 }

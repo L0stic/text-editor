@@ -5,18 +5,14 @@
 #include <assert.h>
 
 #include "String.h"
+#include "Block.h"
 
 #define UNTITLED_TITLE "Untitled"
-
-// typedef struct TextModel_tag {
-//     size_t size;
-//     size_t* blocks
-// } TextModel;
 
 typedef struct Document_tag {
     char* title;
     String* text;
-    // TextModel* textModel;
+    ListBlock* blocks;
 } Document;
 
 Document* CreateDocument(const char* filename);
@@ -24,5 +20,8 @@ void DestroyDocument(Document** ppDoc);
 
 int SetFile(Document* doc, const char* filename);
 int SetUntitledFile(Document* doc);
+
+size_t PrintDocument(FILE* output, const Document* doc);
+void PrintDocumentParameters(FILE* output, const Document* doc);
 
 #endif // DOCUMENT_H_INCLUDED
