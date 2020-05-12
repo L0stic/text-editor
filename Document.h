@@ -24,4 +24,6 @@ int SetUntitledFile(Document* doc);
 size_t PrintDocument(FILE* output, const Document* doc);
 void PrintDocumentParameters(FILE* output, const Document* doc);
 
+size_t GetMaxBlockLen(ListBlock* blocks);
+
 #endif // DOCUMENT_H_INCLUDED

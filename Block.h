@@ -1,8 +1,8 @@
 #ifndef BLOCK_H_INCLUDED
 #define BLOCK_H_INCLUDED
 
-// #include <stdlib.h>
-// #include <assert.h>
+#include <stdlib.h>
+#include <assert.h>
 
 #include "List.h"
 

@@ -80,6 +80,15 @@ static long GetFileSize(FILE* file) {
     return fileSize;
 }
 
+static int InsertBlock(ListBlock* blocks, size_t blockLen) {
+    assert(blocks);
+
+    size_t pos = blocks->last ? blocks->last->data.pos + blocks->last->data.len : 0;
+    BlockData_t blockData = {blockLen, pos, NULL};
+
+    return AddBlockData(blocks, blockData);
+}
+
 int SetFile(Document* doc, const char* filename) {
     assert(doc);
 
@@ -121,18 +130,17 @@ int SetFile(Document* doc, const char* filename) {
         return -5;
     }
 
-    // TODO: add error-handler
-    for (size_t blockLen = 0; !feof(file); ) {
+    // TODO: - add error-handler
+    //       - handle ferr
+    size_t blockLen = 0;
+    while (!feof(file)) {
         if (fgets(buffer, BASE_STRING_SIZE + 1, file)) {
             size_t len = strlen(buffer);
 
             blockLen += len;
 
             if (len > 0 && buffer[len - 1] == '\n') {
-                size_t pos = blocks->last ? blocks->last->data.pos + blocks->last->data.len : 0;
-                BlockData_t blockData = {blockLen - 1, pos, NULL};
-
-                if (AddBlockData(blocks, blockData)) {
+                if (InsertBlock(blocks, blockLen - 1)) {
                     DestroyListBlock(&blocks);
                     DestroyString(&text);
                     free(buffer);
@@ -153,6 +161,17 @@ int SetFile(Document* doc, const char* filename) {
             }
         }
     }
+
+    if (blockLen > 0) {
+        if (InsertBlock(blocks, blockLen)) {
+            DestroyListBlock(&blocks);
+            DestroyString(&text);
+            free(buffer);
+            fclose(file);
+            return -6;
+        }
+    }
+
     free(buffer);
     fclose(file);
 
@@ -236,4 +255,16 @@ void PrintDocumentParameters(FILE* output, const Document* doc) {
     } else {
         fprintf(output, "%s\n", null);
     }
+}
+
+size_t GetMaxBlockLen(ListBlock* blocks) {
+    assert(blocks && blocks->nodes);
+
+    size_t maxLen = 0;
+    for (Block* block = blocks->nodes; block; block = block->next) {
+        if (maxLen < block->data.len) {
+            maxLen = block->data.len;
+        }
+    }
+    return maxLen;
 }

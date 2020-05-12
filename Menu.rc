@@ -6,8 +6,8 @@ Menu MENU {
         MENUITEM SEPARATOR
         MENUITEM "E&xit",       IDM_FILE_EXIT
     }
-    POPUP "&View" {
-        MENUITEM "&Standard",   IDM_VIEW_STANDARD, CHECKED
-        MENUITEM "&Wrap",       IDM_VIEW_WRAP
+
+    POPUP "&Format" {
+        MENUITEM "&Word wrap",  IDM_FORMAT_WRAP
     }
 }

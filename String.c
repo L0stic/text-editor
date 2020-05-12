@@ -1,7 +1,5 @@
 #include "String.h"
 
-#define DIV_WITH_ROUND_UP(op1, op2) (op1 / op2 + ((op1 % op2) ? 1 : 0))
-
 static int ResizeString(String* str) {
     assert(str->len >= str->size);
 

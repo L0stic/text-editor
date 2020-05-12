@@ -2,6 +2,7 @@
 #define STRING_H_INCLUDED
 
 #define BASE_STRING_SIZE 50
+#define DIV_WITH_ROUND_UP(op1, op2) ((op1) / (op2) + (((op1) % (op2)) ? 1 : 0))
 
 #include <stdlib.h>
 #include <stdio.h>
