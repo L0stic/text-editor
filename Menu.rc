@@ -8,6 +8,6 @@ Menu MENU {
     }
 
     POPUP "&Format" {
-        MENUITEM "&Word wrap",  IDM_FORMAT_WRAP
+        MENUITEM "&Word wrap",  IDM_FORMAT_WRAP, CHECKED
     }
 }

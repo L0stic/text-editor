@@ -128,27 +128,12 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
     static OPENFILENAME ofn;
     static PSTR pstrFilename;
 
-// delete: ---------------------------------/
-    static size_t cxChar,       cyChar;
-    static size_t cxClient,     cyClient;
-    static size_t charsClient,  linesClient;
-    static size_t linesDoc,     oldLinesDoc;
-    static size_t maxLen;
-
-    static Block* firstBlock;
-    static size_t firstBlockPos;
-    static size_t delta;
-
-    static FormatMode mode;
-
-    static size_t iHscrollPos,  iVscrollPos;
-// -----------------------------------------/
-
     static Document*        doc;
     static DisplayedModel   dm;
 
     HDC         hdc;
     PAINTSTRUCT ps;
+    HMENU       hMenu;
 
     /* handle the messages */
     switch (message) {
@@ -179,6 +164,8 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
 // ----------------------------------------/
 
         CoverDocument(hwnd, &dm, doc);
+        hMenu = GetMenu(hwnd);
+        CheckMenuItem(hMenu, IDM_FORMAT_WRAP, MF_UNCHECKED);
         break;
     // WM_CREATE
 
@@ -204,8 +191,9 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
                     CoverDocument(hwnd, &dm, doc);
                 }
 
-                // for debugging
-                printf("%s %s\n", pstrFilename,  ofn.lpstrFile);
+// for debugging:-----------------------------------------------/
+                printf("%s %s\n", pstrFilename, ofn.lpstrFile);
+// -------------------------------------------------------------/
             }
             free(pstrFilename);
             break;
@@ -216,83 +204,23 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
             break;
 
         case IDM_FORMAT_WRAP:
-            switch (dm.mode)
-            {
+            hMenu = GetMenu(hwnd);
+
+            switch (dm.mode) {
             case FORMAT_MODE_DEFAULT:
                 SwitchMode(hwnd, &dm, FORMAT_MODE_WRAP);
+                CheckMenuItem(hMenu, IDM_FORMAT_WRAP, MF_CHECKED);
                 break;
+
             case FORMAT_MODE_WRAP:
                 SwitchMode(hwnd, &dm, FORMAT_MODE_DEFAULT);
+                CheckMenuItem(hMenu, IDM_FORMAT_WRAP, MF_UNCHECKED);
                 break;
+
             default:
                 break;
             }
-
-            /*
-            switch(mode) {
-            case FORMAT_MODE_DEFAULT:
-                printf("Default mode is activated\n");
-                mode = FORMAT_MODE_WRAP;
-
-                delta = 0;
-                linesDoc = 0;
-                for (Block* block = doc->blocks->nodes; block != firstBlock; block = block->next) {
-                    if (block->data.len > 0) {
-                        linesDoc += DIV_WITH_ROUND_UP(block->data.len, charsClient);
-                    } else {
-                        ++linesDoc;
-                    }
-                }
-                iVscrollPos = linesDoc;
-                for (Block* block = firstBlock; block; block = block->next) {
-                    if (block->data.len > 0) {
-                        linesDoc += DIV_WITH_ROUND_UP(block->data.len, charsClient);
-                    } else {
-                        ++linesDoc;
-                    }
-                }
-
-                if (linesDoc != oldLinesDoc) {
-                    oldLinesDoc = linesDoc;
-                    printf("Lines: %u\n", linesDoc);
-
-                    // TODO: handle owerflow of ScrollRange
-                    SetScrollRange(hwnd, SB_VERT, 0, linesDoc, FALSE);
-                    SetScrollPos(hwnd, SB_VERT, iVscrollPos, TRUE);
-                }
-
-                iHscrollPos = 0;
-                SetScrollRange(hwnd, SB_HORZ, 0, 0, FALSE);
-                SetScrollPos(hwnd, SB_HORZ, 0, TRUE);
-                //if (model.displayed->mode != FORMAT_MODE_WRAP)
-                //    SwitchMode(model.stored, model.displayed, FORMAT_MODE_WRAP);
-                break;
-
-            case FORMAT_MODE_WRAP:
-                printf("Wrap is activated\n");
-                mode = FORMAT_MODE_DEFAULT;
-
-                linesDoc = doc->blocks->len;
-                if (linesDoc != oldLinesDoc) {
-                    oldLinesDoc = linesDoc;
-                    printf("Lines: %lu\n", linesDoc);
-
-                    // TODO: handle owerflow of ScrollRange
-                    iVscrollPos = firstBlockPos;
-                    SetScrollRange(hwnd, SB_VERT, 0, linesDoc, FALSE);
-                    SetScrollPos(hwnd, SB_VERT, iVscrollPos, TRUE);
-                }
-
-                iHscrollPos = 0;
-                SetScrollRange(hwnd, SB_HORZ, 0, maxLen, FALSE);
-                SetScrollPos(hwnd, SB_HORZ, 0, TRUE);
-                // if (model.displayed->mode != FORMAT_MODE_DEFAULT)
-                //     SwitchMode(model.stored, model.displayed, FORMAT_MODE_DEFAULT);
-                break;
-            }
             break;
-            */
-
         default:
             // PrintError(NULL, ERR_UNKNOWN, __FILE__, __LINE__);
             printf("Unknown problem\n");
@@ -315,105 +243,15 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
 
     case WM_PAINT:
         hdc = BeginPaint(hwnd, &ps);
+
         DisplayModel(hdc, &dm);
-        // printf("Position: %i, %i\n", iHscrollPos, iVscrollPos);
-
-        /*
-        if (doc && doc->text) {
-            Block* block = doc->blocks->nodes;
-            size_t displayedLines = min(linesClient, linesDoc - iVscrollPos);
-            printf("displayedLines = %i\n", displayedLines);
-
-            if (mode == FORMAT_MODE_DEFAULT) {
-                size_t displayedChars;
-                block = firstBlock;
-
-                // print
-                for (size_t i = 0; i < displayedLines; ++i) {
-                    if (iHscrollPos < block->data.len) {
-                        displayedChars = min(charsClient, block->data.len - iHscrollPos);
-                        TextOut(hdc,
-                                0,
-                                i * cyChar,
-                                doc->text->data + block->data.pos + iHscrollPos,
-                                displayedChars);
-                    }
-
-                    block = block->next;
-                }
-            } else { // mode == WRAP
-                size_t linesBlock;
-                size_t nextLine = 0;
-
-                // pass
-                if (iVscrollPos > 0) {
-                    for (size_t i = 0; block;) {
-                        if (block->data.len > 0) {
-                            linesBlock = DIV_WITH_ROUND_UP(block->data.len, charsClient);
-                        } else {
-                            linesBlock = 1;
-                        }
-
-                        i += linesBlock;
-
-                        if (i > iVscrollPos) {
-                            nextLine = linesBlock - (i - iVscrollPos);
-                            break;
-                        }
-
-                        block = block->next;
-                    }
-                }
-
-
-                //firstBlock = block;
-
-                // print
-                for (size_t i = 0; i < displayedLines; nextLine = 0) {
-                    if (block->data.len == 0) {
-                        ++i;
-                        continue;
-                    }
-
-                    linesBlock = DIV_WITH_ROUND_UP(block->data.len, charsClient);
-
-                    if (linesBlock - nextLine <= displayedLines - i) {
-                        for (; nextLine < linesBlock - 1; ++i, ++nextLine) {
-                            TextOut(hdc,
-                                    0,
-                                    i * cyChar,
-                                    doc->text->data + block->data.pos + nextLine * charsClient,
-                                    charsClient);
-                        }
-
-                        TextOut(hdc,
-                                0,
-                                i * cyChar,
-                                doc->text->data + block->data.pos + nextLine * charsClient,
-                                (block->data.len % charsClient) ? (block->data.len % charsClient) : charsClient);
-                        ++i;
-                    } else {
-                        for (; (displayedLines - i) > 0; ++i, ++nextLine) {
-                            TextOut(hdc,
-                                    0,
-                                    i * cyChar,
-                                    doc->text->data + block->data.pos + nextLine * charsClient,
-                                    charsClient);
-                        }
-                    }
-
-                    block = block->next;
-                }
-            }
-        }
-        */
-
+        
         EndPaint(hwnd, &ps);
         break;
     // WM_PAINT
 
     case WM_HSCROLL:
-        if (mode != FORMAT_MODE_DEFAULT) { break; }
+        if (dm.mode != FORMAT_MODE_DEFAULT) { break; }
 
         switch (LOWORD(wParam)) {
         case SB_LINEUP:
@@ -442,11 +280,6 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
         default:
             break;
         }
-
-        // if (iHscrollPos != GetScrollPos(hwnd, SB_HORZ)) {
-        //     SetScrollPos(hwnd, SB_HORZ, iHscrollPos, TRUE);
-        //     InvalidateRect(hwnd, NULL, TRUE);
-        // }
 
         /*
         if (incrementX != 0) {
@@ -499,58 +332,6 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
         default:
             break;
         }
-
-        // if (iVscrollPos != GetScrollPos(hwnd, SB_VERT)) {
-        //     // pass
-        //     if (mode == FORMAT_MODE_DEFAULT) {
-        //         if (firstBlockPos < iVscrollPos) {
-        //             while (firstBlockPos != iVscrollPos) {
-        //                 firstBlock = firstBlock->next;
-        //                 ++firstBlockPos;
-        //             }
-        //         } else if (firstBlockPos > iVscrollPos) {
-        //             while (firstBlockPos != iVscrollPos) {
-        //                 firstBlock = firstBlock ? firstBlock->prev : doc->blocks->last;
-        //                 --firstBlockPos;
-        //             }
-        //         }
-        //     } else { // mode == WRAP
-        //     //     if (firstBlockPos < iVscrollPos) {
-        //     //         while (firstBlockPos != iVscrollPos) {
-        //     //             firstBlock = firstBlock->next;
-        //     //             ++firstBlockPos;
-        //     //         }
-        //     //     } else if (firstBlockPos > iVscrollPos) {
-        //     //         while (firstBlockPos != iVscrollPos) {
-        //     //             firstBlock = firstBlock ? firstBlock->prev : doc->blocks->last;
-        //     //             --firstBlockPos;
-        //     //         }
-        //     //     }
-
-        //     //     // pass
-        //     //     if (iVscrollPos > 0) {
-        //     //         for (size_t i = 0; block;) {
-        //     //             if (block->data.len > 0) {
-        //     //                 linesBlock = DIV_WITH_ROUND_UP(block->data.len, charsClient);
-        //     //             } else {
-        //     //                 linesBlock = 1;
-        //     //             }
-
-        //     //             i += linesBlock;
-
-        //     //             if (i > iVscrollPos) {
-        //     //                 nextLine = linesBlock - (i - iVscrollPos);
-        //     //                 break;
-        //     //             }
-
-        //     //             block = block->next;
-        //     //         }
-        //     //     }
-        //     }
-
-        //     SetScrollPos(hwnd, SB_VERT, iVscrollPos, TRUE);
-        //     InvalidateRect(hwnd, NULL, TRUE);
-        // }
 
         /*
         if (incrementY != 0) {

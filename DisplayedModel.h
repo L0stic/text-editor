@@ -47,21 +47,21 @@ typedef struct {
 
 typedef struct {
     metric_t charMetric;
+
     area_t clientArea;
     area_t documentArea;
+    WrapModel wrapModel;
 
     FormatMode mode;
     Document* doc;
+    
     position_t shift;
 
     struct {
-        size_t pos;
-        Block* start;
-    } firstBlock;
-    size_t delta;
-
-    // DefaultModel defaultModel;
-    WrapModel wrapModel;
+        Block* block;
+        size_t blockPos;
+        size_t charPos;
+    } currentPos;   
 } DisplayedModel;
 
 void InitDisplayedModel(DisplayedModel* dm, TEXTMETRIC* tm);
@@ -69,7 +69,7 @@ void UpdateDisplayedModel(HWND hwnd, DisplayedModel* dm, LPARAM lParam);
 void CoverDocument(HWND hwnd, DisplayedModel* dm, Document* doc);
 
 void SwitchMode(HWND hwnd, DisplayedModel* dm, FormatMode mode);
-void DisplayModel(HDC hdc, DisplayedModel* dm);
+void DisplayModel(HDC hdc, const DisplayedModel* dm);
 
 void Scroll(HWND hwnd, DisplayedModel* dm, size_t count, Direction dir);
 size_t GetCurrentPos(int pos, size_t requiredMax);
