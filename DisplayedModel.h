@@ -1,13 +1,14 @@
+#pragma once
 #ifndef DISPLAYED_MODEL_H_INCLUDED
 #define DISPLAYED_MODEL_H_INCLUDED
 
 #include <windows.h>
+#include <assert.h>
 #include <math.h>
 #include <limits.h>
 
+#include "ScrollBar.h"
 #include "Document.h"
-
-#define MAX_POS INT_MAX
 
 typedef enum {
     FORMAT_MODE_DEFAULT,
@@ -52,10 +53,13 @@ typedef struct {
     area_t documentArea;
     WrapModel wrapModel;
 
+    struct {
+        ScrollBar horizontal;
+        ScrollBar vertical;
+    } scrollBars;
+
     FormatMode mode;
     Document* doc;
-    
-    position_t shift;
 
     struct {
         Block* block;

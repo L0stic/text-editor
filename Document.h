@@ -1,3 +1,4 @@
+#pragma once
 #ifndef DOCUMENT_H_INCLUDED
 #define DOCUMENT_H_INCLUDED
 

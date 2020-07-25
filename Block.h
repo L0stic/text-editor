@@ -1,3 +1,4 @@
+#pragma once
 #ifndef BLOCK_H_INCLUDED
 #define BLOCK_H_INCLUDED
 

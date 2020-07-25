@@ -12,6 +12,8 @@
 #include "Menu.h"
 #include "String.h"
 #include "Document.h"
+#include "ScrollBar.h"
+
 #include "DisplayedModel.h"
 
 /*  Declare Windows procedure  */
@@ -158,10 +160,10 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
             PostMessage(hwnd, WM_CLOSE, 0, 0);
         }
 
-// for debugging:--------------------------/
-        PrintDocumentParameters(NULL, doc);
-        // PrintDocument(NULL, doc);
-// ----------------------------------------/
+        #ifndef DEBUG // ==============================================/
+            PrintDocumentParameters(NULL, doc);
+            // PrintDocument(NULL, doc);
+        #endif // =====================================================/
 
         CoverDocument(hwnd, &dm, doc);
         hMenu = GetMenu(hwnd);
@@ -183,17 +185,16 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
                     DestroyDocument(&doc);
                     doc = newDoc;
                     
-// for debugging:--------------------------------------/
-                    PrintDocumentParameters(NULL, doc);
-                    // PrintDocument(NULL, doc);
-// ----------------------------------------------------/
-                    
+                    #ifndef DEBUG // ==============================================/
+                        PrintDocumentParameters(NULL, doc);
+                        // PrintDocument(NULL, doc);
+                    #endif // =====================================================/
                     CoverDocument(hwnd, &dm, doc);
                 }
 
-// for debugging:-----------------------------------------------/
-                printf("%s %s\n", pstrFilename, ofn.lpstrFile);
-// -------------------------------------------------------------/
+                #ifndef DEBUG // ==============================================/
+                    printf("%s %s\n", pstrFilename, ofn.lpstrFile);
+                #endif // =====================================================/
             }
             free(pstrFilename);
             break;
@@ -266,17 +267,16 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
         case SB_PAGEDOWN:
             Scroll(hwnd, &dm, dm.clientArea.chars, RIGHT);
             break;
-        case SB_THUMBTRACK:
-        {
-            size_t d = GetCurrentPos(HIWORD(wParam), dm.documentArea.chars - dm.clientArea.chars);
+        case SB_THUMBTRACK: {
+            size_t absolutePos = GetAbsolutePos(HIWORD(wParam), dm.scrollBars.horizontal.maxPos);
             
-            if (dm.shift.x < d) {
-                Scroll(hwnd, &dm, d - dm.shift.x, RIGHT);
-            } else if (dm.shift.x > d) {
-                Scroll(hwnd, &dm, dm.shift.x - d, LEFT);
+            if (dm.scrollBars.horizontal.pos < absolutePos) {
+                Scroll(hwnd, &dm, absolutePos - dm.scrollBars.horizontal.pos, RIGHT);
+            } else if (dm.scrollBars.horizontal.pos > absolutePos) {
+                Scroll(hwnd, &dm, dm.scrollBars.horizontal.pos - absolutePos, LEFT);
             }
-        }
             break;
+        }
         default:
             break;
         }
@@ -318,17 +318,16 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
         case SB_PAGEDOWN:
             Scroll(hwnd, &dm, dm.clientArea.lines, DOWN);
             break;
-        case SB_THUMBTRACK:
-        {
-            size_t d = GetCurrentPos(HIWORD(wParam), dm.documentArea.chars - dm.clientArea.chars);;
+        case SB_THUMBTRACK: {
+            size_t absolutePos = GetAbsolutePos(HIWORD(wParam), dm.scrollBars.vertical.maxPos);
             
-            if (dm.shift.y < d) {
-                Scroll(hwnd, &dm, d - dm.shift.y, DOWN);
-            } else if (dm.shift.y > d) {
-                Scroll(hwnd, &dm, dm.shift.y - d, UP);
+            if (dm.scrollBars.vertical.pos < absolutePos) {
+                Scroll(hwnd, &dm, absolutePos - dm.scrollBars.vertical.pos, DOWN);
+            } else if (dm.scrollBars.vertical.pos > absolutePos) {
+                Scroll(hwnd, &dm, dm.scrollBars.vertical.pos - absolutePos, UP);
             }
-        }
             break;
+        }
         default:
             break;
         }
