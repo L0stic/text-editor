@@ -1,3 +1,4 @@
+#pragma once
 #ifndef LIST_H_INCLUDED
 #define LIST_H_INCLUDED
 
@@ -14,7 +15,7 @@
 
 #define LIST(T) \
     typedef struct List##T##_tag {  \
-        size_t len;              \
+        size_t len;                 \
         T* nodes;                   \
         T* last;                    \
     } List##T;                      \

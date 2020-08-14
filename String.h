@@ -1,3 +1,4 @@
+#pragma once
 #ifndef STRING_H_INCLUDED
 #define STRING_H_INCLUDED
 
