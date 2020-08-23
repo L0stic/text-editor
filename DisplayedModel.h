@@ -47,7 +47,15 @@ typedef struct {
 } WrapModel;
 
 typedef struct {
+    Block* block;
+    position_t modelPos;
+} CurrentPos;
+
+typedef struct {
     metric_t charMetric;
+
+    FormatMode mode;
+    Document* doc;
 
     area_t clientArea;
     area_t documentArea;
@@ -56,16 +64,21 @@ typedef struct {
     struct {
         ScrollBar horizontal;
         ScrollBar vertical;
-    } scrollBars;
 
-    FormatMode mode;
-    Document* doc;
+        CurrentPos currentPos;
+    } scrollBars;
+    
+    struct {
+        position_t clientPos;
+        
+        CurrentPos currentPos;
+    } caret;
 
     struct {
         Block* block;
         size_t blockPos;
         size_t charPos;
-    } currentPos;   
+    } currentPos;
 } DisplayedModel;
 
 void InitDisplayedModel(DisplayedModel* dm, TEXTMETRIC* tm);
@@ -75,6 +88,6 @@ void CoverDocument(HWND hwnd, DisplayedModel* dm, Document* doc);
 void SwitchMode(HWND hwnd, DisplayedModel* dm, FormatMode mode);
 void DisplayModel(HDC hdc, const DisplayedModel* dm);
 
-void Scroll(HWND hwnd, DisplayedModel* dm, size_t count, Direction dir);
+void Scroll(HWND hwnd, DisplayedModel* dm, size_t count, Direction dir, RECT* rectangle);
 size_t GetCurrentPos(int pos, size_t requiredMax);
 #endif // DISPLAYED_MODEL_H_INCLUDED

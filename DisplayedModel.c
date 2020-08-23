@@ -18,6 +18,12 @@ void InitDisplayedModel(DisplayedModel* dm, TEXTMETRIC* tm) {
     InitScrollBar(&(dm->scrollBars.horizontal));
     InitScrollBar(&(dm->scrollBars.vertical));
 
+    dm->caret.currentPos.block = NULL;
+    dm->caret.currentPos.modelPos.x = 0;
+    dm->caret.currentPos.modelPos.y = 0;
+    dm->caret.clientPos.x = 0;
+    dm->caret.clientPos.y = 0;
+
     dm->mode = FORMAT_MODE_DEFAULT;
     dm->doc = NULL;
 
@@ -26,37 +32,6 @@ void InitDisplayedModel(DisplayedModel* dm, TEXTMETRIC* tm) {
     dm->currentPos.charPos = 0;
 }
 
-
-// TODO: delete ===============================================
-static int GetMaxPos(size_t requiredMax) {
-    return requiredMax <= MAX_POS ? (int)requiredMax : MAX_POS;
-}
-
-
-size_t GetCurrentPos(int pos, size_t requiredMax) {
-    if (requiredMax > MAX_POS) {
-        long double part = (long double) requiredMax / MAX_POS;
-        return (int) roundl(part * pos);
-    }
-    return (size_t)pos;
-}
-
-
-int GetPos(size_t pos, size_t requiredMax) {
-    if (requiredMax > MAX_POS) {
-        long double part = (long double) requiredMax / MAX_POS;
-        return (int) roundl(part * pos);
-    }
-    return (size_t)pos;
-}
-
-
-static int SetRange(HWND hwnd, size_t modelAreaParam, size_t clientAreaParam, int SB_TYPE) {
-    int maxPos = modelAreaParam > clientAreaParam ? GetMaxPos(modelAreaParam - clientAreaParam) : 0;
-    SetScrollRange(hwnd, SB_TYPE, 0, maxPos, FALSE);
-    return maxPos;
-}
-//=============================================================
 
 static void PrintWrapModel(WrapModel* wrapModel) {
     if (wrapModel->isValid) {
@@ -238,6 +213,10 @@ void CoverDocument(HWND hwnd, DisplayedModel* dm, Document* doc) {
     dm->currentPos.blockPos = 0;
     dm->currentPos.charPos = 0;
 
+    dm->caret.currentPos.block = doc->blocks->nodes;
+    dm->caret.currentPos.modelPos.x = 0;
+    dm->caret.currentPos.modelPos.y = 0;
+
     switch (dm->mode) {
     case FORMAT_MODE_DEFAULT:
         dm->scrollBars.horizontal.maxPos = GetAbsoluteMaxPos(dm->documentArea.chars, dm->clientArea.chars);
@@ -260,13 +239,13 @@ void CoverDocument(HWND hwnd, DisplayedModel* dm, Document* doc) {
     SetRelativeParam(hwnd, &(dm->scrollBars.horizontal), SB_HORZ);
     SetRelativeParam(hwnd, &(dm->scrollBars.vertical), SB_VERT);
 
-    #ifndef DEBUG
+    #ifndef DEBUG // ================================/
         printf("\tHorizontal\n");
         PrintScrollBar(&(dm->scrollBars.horizontal));
         printf("\tVertical\n");
         PrintScrollBar(&(dm->scrollBars.vertical));
         putchar('\n');
-    #endif
+    #endif // =======================================/
 }
 
 
@@ -407,9 +386,20 @@ void DisplayModel(HDC hdc, const DisplayedModel* dm) {
     }
 }
 
-void Scroll(HWND hwnd, DisplayedModel* dm, size_t count, Direction direction) {
+
+void Scroll(HWND hwnd, DisplayedModel* dm, size_t count, Direction direction, RECT* rectangle) {
     assert(dm);
-    
+    assert(rectangle);
+
+    // TODO: update window scroll
+    // rectangle->left = 0;
+    // rectangle->right = dm->charMetric.x * dm->clientArea.chars;
+
+    // rectangle->top = 0;
+    // rectangle->bottom = dm->charMetric.y * dm->clientArea.lines;
+
+    rectangle = NULL;
+
     switch (direction) {
     case UP:
         count = min(count, dm->scrollBars.vertical.pos);
@@ -451,18 +441,18 @@ void Scroll(HWND hwnd, DisplayedModel* dm, size_t count, Direction direction) {
             break;
         }
 
-        #ifndef DEBUG // ==============================================/
-            PrintPos(dm);
-        #endif // =====================================================/
-
         SetRelativePos(hwnd, &(dm->scrollBars.vertical), SB_VERT);
-        InvalidateRect(hwnd, NULL, TRUE);
+
+        // TODO: update vertical window scroll
+        // ScrollWindow(hwnd, 0, count * dm->charMetric.y, NULL, NULL);
+        // rectangle->bottom = dm->charMetric.y * min(count, dm->clientArea.lines);
         break;
     // UP
     
     case DOWN:
         count = min(count, dm->scrollBars.vertical.maxPos - dm->scrollBars.vertical.pos);
         if (count == 0) { return; }
+
         dm->scrollBars.vertical.pos += count;
 
         switch (dm->mode) {
@@ -512,12 +502,11 @@ void Scroll(HWND hwnd, DisplayedModel* dm, size_t count, Direction direction) {
             break;
         }
 
-        #ifndef DEBUG // ==============================================/
-            PrintPos(dm);
-        #endif // =====================================================/
-        
         SetRelativePos(hwnd, &(dm->scrollBars.vertical), SB_VERT);
-        InvalidateRect(hwnd, NULL, TRUE);
+
+        // TODO: update vertical window scroll
+        // ScrollWindow(hwnd, 0, -count * dm->charMetric.y, NULL, NULL);
+        // rectangle->top = dm->charMetric.y * (dm->clientArea.lines - min(count, dm->clientArea.lines));
         break;
     // DOWN
 
@@ -528,8 +517,12 @@ void Scroll(HWND hwnd, DisplayedModel* dm, size_t count, Direction direction) {
         if (count == 0) { return; }
 
         dm->scrollBars.horizontal.pos -= count;
+
         SetRelativePos(hwnd, &(dm->scrollBars.horizontal), SB_HORZ);
-        InvalidateRect(hwnd, NULL, TRUE);
+
+        // TODO: update horizonatl window scroll
+        // ScrollWindow(hwnd, count * dm->charMetric.x, 0, NULL, NULL);
+        // rectangle->left = dm->charMetric.x * (dm->clientArea.chars - min(count, dm->clientArea.chars));
         break;
     // LEFT
 
@@ -541,16 +534,26 @@ void Scroll(HWND hwnd, DisplayedModel* dm, size_t count, Direction direction) {
 
         dm->scrollBars.horizontal.pos += count;
         SetRelativePos(hwnd, &(dm->scrollBars.horizontal), SB_HORZ);
-        InvalidateRect(hwnd, NULL, TRUE);
+
+        // TODO: update horizonatl window scroll
+        // ScrollWindow(hwnd, -count * dm->charMetric.x, 0, NULL, NULL);
+        // rectangle->right = dm->charMetric.x * min(count, dm->clientArea.chars);
         break;
     // RIGHT
 
     default:
     // TODO: error
-        break;
+        return;
     }
 
+    #ifndef DEBUG // ==============================================/
+        PrintPos(dm);
+    #endif // =====================================================/
+
+    InvalidateRect(hwnd, rectangle, TRUE);
+
     #ifndef DEBUG
+        PrintScrollBar(&(dm->scrollBars.vertical));
         PrintScrollBar(&(dm->scrollBars.horizontal));
     #endif
 }

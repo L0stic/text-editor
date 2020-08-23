@@ -9,6 +9,7 @@
 #include <commdlg.h>
 #include <stdio.h>
 
+#include "Error.h"
 #include "Menu.h"
 #include "String.h"
 #include "Document.h"
@@ -49,10 +50,8 @@ int WINAPI WinMain(HINSTANCE hThisInstance, HINSTANCE hPrevInstance,
 
     /* Register the window class, and if it fails quit the program */
     if (!RegisterClassEx(&wincl)) {
-        // PrintError(NULL, ERR_UNKNOWN, __FILE__, __LINE__);
-        // return ERR_UNKNOWN;
-        printf("Class registration failed\n");
-        return 0;
+        PrintError(NULL, ERR_UNKNOWN, __FILE__, __LINE__);
+        return ERR_UNKNOWN;
     }
 
     /* The class is registered, let's create the program */
@@ -86,11 +85,6 @@ int WINAPI WinMain(HINSTANCE hThisInstance, HINSTANCE hPrevInstance,
 }
 
 void InitOpenFilename(HWND hwnd, OPENFILENAME* ofn) {
-/*
-    static char szFilter[] = "Text Files(*.TXT)\0*.txt\0" \
-                            "ASCII Files(*.ASC)\0*.asc\0" \
-                            "All Files(*.*)\0*.*\0\0";
-*/
     static char szFilter[] = "Text Files(*.TXT)\0*.txt\0";
 
     ofn->lStructSize        = sizeof(OPENFILENAME);
@@ -136,6 +130,7 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
     HDC         hdc;
     PAINTSTRUCT ps;
     HMENU       hMenu;
+    RECT        rectangle;
 
     /* handle the messages */
     switch (message) {
@@ -166,6 +161,7 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
         #endif // =====================================================/
 
         CoverDocument(hwnd, &dm, doc);
+
         hMenu = GetMenu(hwnd);
         CheckMenuItem(hMenu, IDM_FORMAT_WRAP, MF_UNCHECKED);
         break;
@@ -174,7 +170,9 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
     case WM_COMMAND:
         switch (LOWORD(wParam)) {
         case IDM_FILE_OPEN:
-            printf("Open is activated\n");
+            #ifndef DEBUG // ==================/
+                printf("Open is activated\n");
+            #endif // =========================/
 
             InitOpenFilename(hwnd, &ofn);
             pstrFilename = (PSTR)calloc(_MAX_PATH, sizeof(char));
@@ -200,7 +198,10 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
             break;
 
         case IDM_FILE_EXIT:
-            printf("Exit is activated\n");
+            #ifndef DEBUG // ==================/
+                printf("Exit is activated\n");
+            #endif // =========================/
+
             PostMessage(hwnd, WM_CLOSE, 0, 0);
             break;
 
@@ -219,13 +220,14 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
                 break;
 
             default:
-                break;
+                PrintError(NULL, ERR_UNKNOWN, __FILE__, __LINE__);
+                return ERR_UNKNOWN;
             }
             break;
+
         default:
-            // PrintError(NULL, ERR_UNKNOWN, __FILE__, __LINE__);
-            printf("Unknown problem\n");
-            break;
+            PrintError(NULL, ERR_UNKNOWN, __FILE__, __LINE__);
+            return ERR_UNKNOWN;
         }
 
         // common actions for listed commands
@@ -239,11 +241,33 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
 
     case WM_SIZE:
         UpdateDisplayedModel(hwnd, &dm, lParam);
+        dm.caret.clientPos.x = 0;
+        dm.caret.clientPos.y = 0;
+
+        if(hwnd == GetFocus()) {
+            SetCaretPos(dm.caret.clientPos.x * dm.charMetric.x, dm.caret.clientPos.y * dm.charMetric.y);
+        }
         break;
     // WM_SIZE
 
+    case WM_SETFOCUS:
+        // create and show the caret
+        CreateCaret(hwnd, NULL, dm.charMetric.x, dm.charMetric.y);
+        SetCaretPos(dm.caret.clientPos.x * dm.charMetric.x, dm.caret.clientPos.y * dm.charMetric.y);
+        ShowCaret(hwnd);
+        break;
+    // WM_SETFOCUS
+    
+    case WM_KILLFOCUS:
+        // hide and destroy the caret
+        HideCaret(hwnd);
+        DestroyCaret();
+        break;
+    // WM_KILLFOCUS
+
     case WM_PAINT:
         hdc = BeginPaint(hwnd, &ps);
+        SelectObject(hdc, GetStockObject(SYSTEM_FIXED_FONT));
 
         DisplayModel(hdc, &dm);
         
@@ -253,127 +277,171 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
 
     case WM_HSCROLL:
         if (dm.mode != FORMAT_MODE_DEFAULT) { break; }
-
         switch (LOWORD(wParam)) {
         case SB_LINEUP:
-            Scroll(hwnd, &dm, 1, LEFT);
+            Scroll(hwnd, &dm, 1, LEFT, &rectangle);
             break;
         case SB_LINEDOWN:
-            Scroll(hwnd, &dm, 1, RIGHT);
+            Scroll(hwnd, &dm, 1, RIGHT, &rectangle);
             break;
         case SB_PAGEUP:
-            Scroll(hwnd, &dm, dm.clientArea.chars, LEFT);
+            Scroll(hwnd, &dm, dm.clientArea.chars, LEFT, &rectangle);
             break;
         case SB_PAGEDOWN:
-            Scroll(hwnd, &dm, dm.clientArea.chars, RIGHT);
+            Scroll(hwnd, &dm, dm.clientArea.chars, RIGHT, &rectangle);
             break;
         case SB_THUMBTRACK: {
             size_t absolutePos = GetAbsolutePos(HIWORD(wParam), dm.scrollBars.horizontal.maxPos);
             
             if (dm.scrollBars.horizontal.pos < absolutePos) {
-                Scroll(hwnd, &dm, absolutePos - dm.scrollBars.horizontal.pos, RIGHT);
+                Scroll(hwnd, &dm, absolutePos - dm.scrollBars.horizontal.pos, RIGHT, &rectangle);
             } else if (dm.scrollBars.horizontal.pos > absolutePos) {
-                Scroll(hwnd, &dm, dm.scrollBars.horizontal.pos - absolutePos, LEFT);
+                Scroll(hwnd, &dm, dm.scrollBars.horizontal.pos - absolutePos, LEFT, &rectangle);
             }
             break;
         }
         default:
             break;
         }
-
-        /*
-        if (incrementX != 0) {
-            // update model and set valid increment
-            //incrementX = UpdateModelStandardX(model.stored, model.displayed, incrementX);
-
-            // set window changes
-            ScrollWindow(hwnd, -incrementX * model.displayed->charPixelsX, 0, NULL, NULL);
-            //SetInvalidRectagleX(model.displayed, incrementX, &invalidRectangle);
-            //InvalidateRect(hwnd, &invalidRectangle, TRUE);
-
-            // process scrollbars changes
-            if (LOWORD(wParam) == SB_THUMBTRACK)
-                scrollPosition = HIWORD(wParam);
-            else
-                scrollPosition = countScrollPositionX(model.stored, model.displayed);
-
-            SetScrollPos(hWindow, SB_HORZ, scrollPosition, TRUE);
-        }
-        */
-
         break;
     // WM_HSCROLL
 
     case WM_VSCROLL:
         switch (LOWORD(wParam)) {
         case SB_LINEUP:
-            Scroll(hwnd, &dm, 1, UP);
+            Scroll(hwnd, &dm, 1, UP, &rectangle);
             break;
         case SB_LINEDOWN:
-            Scroll(hwnd, &dm, 1, DOWN);
+            Scroll(hwnd, &dm, 1, DOWN, &rectangle);
             break;
         case SB_PAGEUP:
-            Scroll(hwnd, &dm, dm.clientArea.lines, UP);
+            Scroll(hwnd, &dm, dm.clientArea.lines, UP, &rectangle);
             break;
         case SB_PAGEDOWN:
-            Scroll(hwnd, &dm, dm.clientArea.lines, DOWN);
+            Scroll(hwnd, &dm, dm.clientArea.lines, DOWN, &rectangle);
             break;
         case SB_THUMBTRACK: {
             size_t absolutePos = GetAbsolutePos(HIWORD(wParam), dm.scrollBars.vertical.maxPos);
             
             if (dm.scrollBars.vertical.pos < absolutePos) {
-                Scroll(hwnd, &dm, absolutePos - dm.scrollBars.vertical.pos, DOWN);
+                Scroll(hwnd, &dm, absolutePos - dm.scrollBars.vertical.pos, DOWN, &rectangle);
             } else if (dm.scrollBars.vertical.pos > absolutePos) {
-                Scroll(hwnd, &dm, dm.scrollBars.vertical.pos - absolutePos, UP);
+                Scroll(hwnd, &dm, dm.scrollBars.vertical.pos - absolutePos, UP, &rectangle);
             }
             break;
         }
         default:
             break;
         }
-
-        /*
-        if (incrementY != 0) {
-            // update model and set valid increment
-            if (model.displayed->mode == FORMAT_MODE_DEFAULT)
-                incrementY = UpdateModelStandardY(model.stored, model.displayed, incrementY);
-            if (model.displayed->mode == FORMAT_MODE_WRAP)
-                incrementY = UpdateModelWrapY(model.stored, model.displayed, incrementY);
-
-            // set window changes
-            ScrollWindow(hWindow, 0, -incrementY * model.displayed->charPixelsY, NULL, NULL);
-            SetInvalidRectagleY(model.displayed, incrementY, &invalidRectangle);
-            InvalidateRect(hWindow, &invalidRectangle, TRUE);
-
-            // process scrollbars changes
-            if (LOWORD(wParam) == SB_THUMBTRACK)
-                scrollPosition = HIWORD(wParam);
-            else
-                scrollPosition = countScrollPositionY(model.stored, model.displayed);
-
-            SetScrollPos(hWindow, SB_VERT, scrollPosition, TRUE);
-        }
-        */
-
         break;
     // WM_VSCROLL
 
     case WM_KEYDOWN:
         switch (wParam) {
         case VK_UP:
-            PostMessage(hwnd, WM_VSCROLL, SB_LINEUP, (LPARAM)0);
+            if (dm.mode == FORMAT_MODE_WRAP) { return; }
+
+            if (dm.caret.currentPos.modelPos.y > 0) {
+                --dm.caret.currentPos.modelPos.y;
+                dm.caret.currentPos.block = dm.caret.currentPos.block->prev;
+
+                if (dm.caret.clientPos.y > 0) {
+                    --dm.caret.clientPos.y;
+                } else {
+                    PostMessage(hwnd, WM_VSCROLL, SB_LINEUP, (LPARAM)0);
+                }
+                
+                if (dm.caret.currentPos.modelPos.x > dm.caret.currentPos.block->data.len - 1) {
+                    size_t delta = dm.caret.currentPos.modelPos.x - (dm.caret.currentPos.block->data.len - 1);
+                    dm.caret.currentPos.modelPos.x = dm.caret.currentPos.block->data.len - 1;
+
+                    if (dm.caret.clientPos.x < delta) {
+                        Scroll(hwnd, &dm, delta - dm.caret.clientPos.x, LEFT, &rectangle);
+
+                        dm.caret.clientPos.x = 0;
+                    } else {
+                        dm.caret.clientPos.x -= delta;
+                    }
+                }
+            }
             break;
 
         case VK_DOWN:
-            PostMessage(hwnd, WM_VSCROLL, SB_LINEDOWN, (LPARAM)0);
+            if (dm.mode == FORMAT_MODE_WRAP) { return; }
+
+            if (dm.caret.currentPos.modelPos.y < dm.documentArea.lines - 1) {
+                ++dm.caret.currentPos.modelPos.y;
+                dm.caret.currentPos.block = dm.caret.currentPos.block->next;
+
+                if (dm.caret.clientPos.y < dm.clientArea.lines - 1) {
+                    ++dm.caret.clientPos.y;
+                } else {
+                    PostMessage(hwnd, WM_VSCROLL, SB_LINEDOWN, (LPARAM)0);
+                }
+
+                if (dm.caret.currentPos.modelPos.x > dm.caret.currentPos.block->data.len - 1) {
+                    size_t delta = dm.caret.currentPos.modelPos.x - (dm.caret.currentPos.block->data.len - 1);
+                    dm.caret.currentPos.modelPos.x = dm.caret.currentPos.block->data.len - 1;
+
+                    if (dm.caret.clientPos.x < delta) {
+                        Scroll(hwnd, &dm, delta - dm.caret.clientPos.x, LEFT, &rectangle);
+
+                        dm.caret.clientPos.x = 0;
+                    } else {
+                        dm.caret.clientPos.x -= delta;
+                    }
+                }
+            }
             break;
 
         case VK_LEFT:
-            PostMessage(hwnd, WM_HSCROLL, SB_LINEUP, (LPARAM)0);
+            if (dm.mode == FORMAT_MODE_WRAP) { return; }
+            
+            if (dm.caret.currentPos.modelPos.x > 0) {
+                --dm.caret.currentPos.modelPos.x;
+
+                if (dm.caret.clientPos.x > 0) {
+                    --dm.caret.clientPos.x;
+                } else {
+                    PostMessage(hwnd, WM_HSCROLL, SB_LINEUP, (LPARAM)0);
+                }
+            } else if (dm.caret.currentPos.modelPos.y > 0) {
+                --dm.caret.currentPos.modelPos.y;
+                dm.caret.currentPos.block = dm.caret.currentPos.block->prev;
+                
+                if (dm.caret.clientPos.y > 0) {
+                    --dm.caret.clientPos.y;
+                } else {
+                    PostMessage(hwnd, WM_VSCROLL, SB_LINEUP, (LPARAM)0);
+                }
+
+                PostMessage(hwnd, WM_KEYDOWN, VK_END, (LPARAM)0);
+            }
             break;
 
         case VK_RIGHT:
-            PostMessage(hwnd, WM_HSCROLL, SB_LINEDOWN, (LPARAM)0);
+            if (dm.mode == FORMAT_MODE_WRAP) { return; }
+
+            if (dm.caret.currentPos.modelPos.x < dm.caret.currentPos.block->data.len - 1) {
+                ++dm.caret.currentPos.modelPos.x;
+
+                if (dm.caret.clientPos.x < dm.clientArea.chars - 1) {
+                    ++dm.caret.clientPos.x;
+                } else {
+                    PostMessage(hwnd, WM_HSCROLL, SB_LINEDOWN, (LPARAM)0);
+                }
+            } else if (dm.caret.currentPos.modelPos.y < dm.documentArea.lines - 1) {
+                ++dm.caret.currentPos.modelPos.y;
+                dm.caret.currentPos.block = dm.caret.currentPos.block->next;
+                
+                if (dm.caret.clientPos.y < dm.clientArea.lines - 1) {
+                    ++dm.caret.clientPos.y;
+                } else {
+                    PostMessage(hwnd, WM_VSCROLL, SB_LINEDOWN, (LPARAM)0);
+                }
+
+                PostMessage(hwnd, WM_KEYDOWN, VK_HOME, (LPARAM)0);
+            }
             break;
 
         case VK_PRIOR:
@@ -385,18 +453,119 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
             break;
 
         case VK_HOME:
-            PostMessage(hwnd, WM_HSCROLL, SB_PAGEUP, (LPARAM)0);
+            if (dm.mode == FORMAT_MODE_WRAP) { return; }
+
+            if (dm.caret.currentPos.modelPos.x > 0) {
+                size_t deltaModel = dm.caret.currentPos.modelPos.x;
+                size_t deltaClient = dm.caret.clientPos.x;
+
+                if (deltaModel > deltaClient) {
+                    Scroll(hwnd, &dm, deltaModel - deltaClient, LEFT, &rectangle);
+                }
+                dm.caret.clientPos.x = 0;
+
+                dm.caret.currentPos.modelPos.x = 0;
+            }
+            
+            // FindCaret();
             break;
 
         case VK_END:
-            PostMessage(hwnd, WM_HSCROLL, SB_PAGEDOWN, (LPARAM)0);
+            if (dm.mode == FORMAT_MODE_WRAP) { return; }
+            
+            if (dm.caret.currentPos.modelPos.x < dm.caret.currentPos.block->data.len - 1) {
+                size_t deltaModel = (dm.caret.currentPos.block->data.len - 1) - dm.caret.currentPos.modelPos.x;
+                size_t deltaClient = (dm.clientArea.chars - 1) - dm.caret.clientPos.x;
+
+                if (deltaModel > deltaClient) {
+                    dm.caret.clientPos.x = dm.clientArea.chars - 1;
+                    Scroll(hwnd, &dm, deltaModel - deltaClient, RIGHT, &rectangle);
+                } else {
+                    dm.caret.clientPos.x += deltaModel;
+                }
+
+                dm.caret.currentPos.modelPos.x = dm.caret.currentPos.block->data.len - 1;
+            }
+
+            // FindCaret();
             break;
 
         default:
             break;
         }
+
+        SetCaretPos(dm.caret.clientPos.x * dm.charMetric.x, dm.caret.clientPos.y * dm.charMetric.y);
         break;
     // WM_KEYDOWN
+
+    case WM_CHAR :
+        for(int i = 0; i < (int) LOWORD(lParam); i++) {
+            switch(wParam) {
+            case '\b' : // backspace
+                printf("backspace\n");
+                // if(xCaret > 0) {
+                //     xCaret--;
+                //     SendMessage(hwnd, WM_KEYDOWN, VK_DELETE, 1L);
+                // }
+                break;
+
+            case '\t' : // tab
+                printf("tab\n");
+                // do {
+                //     SendMessage(hwnd, WM_CHAR, ' ', 1L);
+                // } while(xCaret % 8 != 0);
+                break;
+
+            case '\n' : // line feed
+                printf("line feed\n");
+                // if(++yCaret == cyBuffer) { yCaret = 0; }
+                break;
+
+            case '\r' : // carriage return
+                printf("carriage return\n");
+                // xCaret = 0;
+                // if(++yCaret == cyBuffer) { yCaret = 0; }
+                break;
+
+            case '\x1B' : // escape
+                printf("escape\n");
+                // for(y = 0; y < cyBuffer; y++) {
+                //     for(x = 0; x < cxBuffer; x++) {
+                //         BUFFER(x, y) = ' ';
+                //     }
+                // }
+
+                // xCaret = 0;
+                // yCaret = 0;
+
+                // InvalidateRect(hwnd, NULL, FALSE);
+                break;
+
+            default : // character codes
+                printf("%c\n", (char) wParam);
+                // BUFFER(xCaret, yCaret) = (char) wParam;
+
+                // HideCaret(hwnd);
+                // hdc = GetDC(hwnd);
+
+                // SelectObject(hdc, GetStockObject(SYSTEM_FIXED_FONT));
+                
+                // TextOut(hdc, xCaret * cxChar, yCaret * cyChar, & BUFFER(xCaret, yCaret), 1);
+                
+                // ShowCaret(hwnd);
+                // ReleaseDC(hwnd, hdc);
+                
+                // if(++xCaret == cxBuffer) {
+                //     xCaret = 0;
+                //     if(++yCaret == cyBuffer) { yCaret = 0; }
+                // }
+                break;
+            }
+        }
+
+        SetCaretPos(dm.caret.clientPos.x * dm.charMetric.x, dm.caret.clientPos.y * dm.charMetric.y);
+        break;
+    // WM_CHAR
 
     case WM_DESTROY:
         if (doc) { DestroyDocument(&doc); }
