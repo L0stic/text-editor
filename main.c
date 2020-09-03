@@ -153,6 +153,7 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
         if (!doc) {
             printf("All is so bad");
             PostMessage(hwnd, WM_CLOSE, 0, 0);
+            break;
         }
 
         #ifndef DEBUG // ==============================================/
@@ -241,15 +242,16 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
 
     case WM_SIZE:
         UpdateDisplayedModel(hwnd, &dm, lParam);
-        dm.caret.clientPos.x = 0;
-        dm.caret.clientPos.y = 0;
-
-        if(hwnd == GetFocus()) {
-            SetCaretPos(dm.caret.clientPos.x * dm.charMetric.x, dm.caret.clientPos.y * dm.charMetric.y);
-        }
+        
+        #ifdef CARET_ON
+            if(hwnd == GetFocus()) {
+                SetCaretPos(dm.caret.clientPos.x * dm.charMetric.x, dm.caret.clientPos.y * dm.charMetric.y);
+            }
+        #endif
         break;
     // WM_SIZE
 
+#ifdef CARET_ON
     case WM_SETFOCUS:
         // create and show the caret
         CreateCaret(hwnd, NULL, dm.charMetric.x, dm.charMetric.y);
@@ -264,6 +266,7 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
         DestroyCaret();
         break;
     // WM_KILLFOCUS
+#endif
 
     case WM_PAINT:
         hdc = BeginPaint(hwnd, &ps);
@@ -277,6 +280,7 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
 
     case WM_HSCROLL:
         if (dm.mode != FORMAT_MODE_DEFAULT) { break; }
+
         switch (LOWORD(wParam)) {
         case SB_LINEUP:
             Scroll(hwnd, &dm, 1, LEFT, &rectangle);
@@ -310,16 +314,34 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
         switch (LOWORD(wParam)) {
         case SB_LINEUP:
             Scroll(hwnd, &dm, 1, UP, &rectangle);
+
+            // if (Scroll(hwnd, &dm, 1, UP, &rectangle)) {
+            //     if (dm.caret.clientPos.y < dm.clientArea.lines - 1) {
+            //         ++dm.caret.clientPos.y;
+            //     } else {
+            //         dm.caret.isHidden = 1;
+            //     }
+            // }
             break;
+
         case SB_LINEDOWN:
             Scroll(hwnd, &dm, 1, DOWN, &rectangle);
+
+            // if (dm.caret.clientPos.y > 0) {
+            //     --dm.caret.clientPos.y;
+            // } else {
+            //     dm.caret.isHidden = 1;
+            // }
             break;
+
         case SB_PAGEUP:
             Scroll(hwnd, &dm, dm.clientArea.lines, UP, &rectangle);
             break;
+
         case SB_PAGEDOWN:
             Scroll(hwnd, &dm, dm.clientArea.lines, DOWN, &rectangle);
             break;
+
         case SB_THUMBTRACK: {
             size_t absolutePos = GetAbsolutePos(HIWORD(wParam), dm.scrollBars.vertical.maxPos);
             
@@ -333,168 +355,206 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
         default:
             break;
         }
+
+        // SetCaretPos(dm.caret.clientPos.x * dm.charMetric.x, dm.caret.clientPos.y * dm.charMetric.y);
         break;
     // WM_VSCROLL
 
     case WM_KEYDOWN:
         switch (wParam) {
         case VK_UP:
-            if (dm.mode == FORMAT_MODE_WRAP) { return; }
+            #ifdef CARET_ON
+                if (dm.mode == FORMAT_MODE_WRAP) { return; }
 
-            if (dm.caret.currentPos.modelPos.y > 0) {
-                --dm.caret.currentPos.modelPos.y;
-                dm.caret.currentPos.block = dm.caret.currentPos.block->prev;
+                if (dm.caret.currentPos.modelPos.y > 0) {
+                    --dm.caret.currentPos.modelPos.y;
+                    dm.caret.currentPos.block = dm.caret.currentPos.block->prev;
 
-                if (dm.caret.clientPos.y > 0) {
-                    --dm.caret.clientPos.y;
-                } else {
-                    PostMessage(hwnd, WM_VSCROLL, SB_LINEUP, (LPARAM)0);
-                }
-                
-                if (dm.caret.currentPos.modelPos.x > dm.caret.currentPos.block->data.len - 1) {
-                    size_t delta = dm.caret.currentPos.modelPos.x - (dm.caret.currentPos.block->data.len - 1);
-                    dm.caret.currentPos.modelPos.x = dm.caret.currentPos.block->data.len - 1;
-
-                    if (dm.caret.clientPos.x < delta) {
-                        Scroll(hwnd, &dm, delta - dm.caret.clientPos.x, LEFT, &rectangle);
-
-                        dm.caret.clientPos.x = 0;
+                    if (dm.caret.clientPos.y > 0) {
+                        --dm.caret.clientPos.y;
                     } else {
-                        dm.caret.clientPos.x -= delta;
+                        PostMessage(hwnd, WM_VSCROLL, SB_LINEUP, (LPARAM)0);
+                    }
+                    
+                    if (dm.caret.currentPos.modelPos.x > dm.caret.currentPos.block->data.len - 1) {
+                        size_t delta = dm.caret.currentPos.modelPos.x - (dm.caret.currentPos.block->data.len - 1);
+                        dm.caret.currentPos.modelPos.x = dm.caret.currentPos.block->data.len - 1;
+
+                        if (dm.caret.clientPos.x < delta) {
+                            Scroll(hwnd, &dm, delta - dm.caret.clientPos.x, LEFT, &rectangle);
+
+                            dm.caret.clientPos.x = 0;
+                        } else {
+                            dm.caret.clientPos.x -= delta;
+                        }
                     }
                 }
-            }
+            #else
+                PostMessage(hwnd, WM_VSCROLL, SB_LINEUP, (LPARAM)0);
+            #endif
             break;
 
         case VK_DOWN:
-            if (dm.mode == FORMAT_MODE_WRAP) { return; }
+            #ifdef CARET_ON
+                if (dm.mode == FORMAT_MODE_WRAP) { return; }
 
-            if (dm.caret.currentPos.modelPos.y < dm.documentArea.lines - 1) {
-                ++dm.caret.currentPos.modelPos.y;
-                dm.caret.currentPos.block = dm.caret.currentPos.block->next;
+                if (dm.caret.currentPos.modelPos.y < dm.documentArea.lines - 1) {
+                    ++dm.caret.currentPos.modelPos.y;
+                    dm.caret.currentPos.block = dm.caret.currentPos.block->next;
 
-                if (dm.caret.clientPos.y < dm.clientArea.lines - 1) {
-                    ++dm.caret.clientPos.y;
-                } else {
-                    PostMessage(hwnd, WM_VSCROLL, SB_LINEDOWN, (LPARAM)0);
-                }
-
-                if (dm.caret.currentPos.modelPos.x > dm.caret.currentPos.block->data.len - 1) {
-                    size_t delta = dm.caret.currentPos.modelPos.x - (dm.caret.currentPos.block->data.len - 1);
-                    dm.caret.currentPos.modelPos.x = dm.caret.currentPos.block->data.len - 1;
-
-                    if (dm.caret.clientPos.x < delta) {
-                        Scroll(hwnd, &dm, delta - dm.caret.clientPos.x, LEFT, &rectangle);
-
-                        dm.caret.clientPos.x = 0;
+                    if (dm.caret.clientPos.y < dm.clientArea.lines - 1) {
+                        ++dm.caret.clientPos.y;
                     } else {
-                        dm.caret.clientPos.x -= delta;
+                        PostMessage(hwnd, WM_VSCROLL, SB_LINEDOWN, (LPARAM)0);
+                    }
+
+                    if (dm.caret.currentPos.modelPos.x > dm.caret.currentPos.block->data.len - 1) {
+                        size_t delta = dm.caret.currentPos.modelPos.x - (dm.caret.currentPos.block->data.len - 1);
+                        dm.caret.currentPos.modelPos.x = dm.caret.currentPos.block->data.len - 1;
+
+                        if (dm.caret.clientPos.x < delta) {
+                            Scroll(hwnd, &dm, delta - dm.caret.clientPos.x, LEFT, &rectangle);
+
+                            dm.caret.clientPos.x = 0;
+                        } else {
+                            dm.caret.clientPos.x -= delta;
+                        }
                     }
                 }
-            }
+            #else
+                PostMessage(hwnd, WM_VSCROLL, SB_LINEDOWN, (LPARAM)0);
+            #endif
             break;
 
         case VK_LEFT:
-            if (dm.mode == FORMAT_MODE_WRAP) { return; }
-            
-            if (dm.caret.currentPos.modelPos.x > 0) {
-                --dm.caret.currentPos.modelPos.x;
-
-                if (dm.caret.clientPos.x > 0) {
-                    --dm.caret.clientPos.x;
-                } else {
-                    PostMessage(hwnd, WM_HSCROLL, SB_LINEUP, (LPARAM)0);
-                }
-            } else if (dm.caret.currentPos.modelPos.y > 0) {
-                --dm.caret.currentPos.modelPos.y;
-                dm.caret.currentPos.block = dm.caret.currentPos.block->prev;
+            #ifdef CARET_ON
+                if (dm.mode == FORMAT_MODE_WRAP) { return; }
                 
-                if (dm.caret.clientPos.y > 0) {
-                    --dm.caret.clientPos.y;
-                } else {
-                    PostMessage(hwnd, WM_VSCROLL, SB_LINEUP, (LPARAM)0);
-                }
+                if (dm.caret.currentPos.modelPos.x > 0) {
+                    --dm.caret.currentPos.modelPos.x;
 
-                PostMessage(hwnd, WM_KEYDOWN, VK_END, (LPARAM)0);
-            }
+                    if (dm.caret.clientPos.x > 0) {
+                        --dm.caret.clientPos.x;
+                    } else {
+                        PostMessage(hwnd, WM_HSCROLL, SB_LINEUP, (LPARAM)0);
+                    }
+                } else if (dm.caret.currentPos.modelPos.y > 0) {
+                    --dm.caret.currentPos.modelPos.y;
+                    dm.caret.currentPos.block = dm.caret.currentPos.block->prev;
+                    
+                    if (dm.caret.clientPos.y > 0) {
+                        --dm.caret.clientPos.y;
+                    } else {
+                        PostMessage(hwnd, WM_VSCROLL, SB_LINEUP, (LPARAM)0);
+                    }
+
+                    PostMessage(hwnd, WM_KEYDOWN, VK_END, (LPARAM)0);
+                }
+            #else
+                PostMessage(hwnd, WM_HSCROLL, SB_LINEUP, (LPARAM)0);
+            #endif
             break;
 
         case VK_RIGHT:
-            if (dm.mode == FORMAT_MODE_WRAP) { return; }
+            #ifdef CARET_ON
+                if (dm.mode == FORMAT_MODE_WRAP) { return; }
 
-            if (dm.caret.currentPos.modelPos.x < dm.caret.currentPos.block->data.len - 1) {
-                ++dm.caret.currentPos.modelPos.x;
+                if (dm.caret.currentPos.modelPos.x < dm.caret.currentPos.block->data.len - 1) {
+                    ++dm.caret.currentPos.modelPos.x;
 
-                if (dm.caret.clientPos.x < dm.clientArea.chars - 1) {
-                    ++dm.caret.clientPos.x;
-                } else {
-                    PostMessage(hwnd, WM_HSCROLL, SB_LINEDOWN, (LPARAM)0);
+                    if (dm.caret.clientPos.x < dm.clientArea.chars - 1) {
+                        ++dm.caret.clientPos.x;
+                    } else {
+                        PostMessage(hwnd, WM_HSCROLL, SB_LINEDOWN, (LPARAM)0);
+                    }
+                } else if (dm.caret.currentPos.modelPos.y < dm.documentArea.lines - 1) {
+                    ++dm.caret.currentPos.modelPos.y;
+                    dm.caret.currentPos.block = dm.caret.currentPos.block->next;
+                    
+                    if (dm.caret.clientPos.y < dm.clientArea.lines - 1) {
+                        ++dm.caret.clientPos.y;
+                    } else {
+                        PostMessage(hwnd, WM_VSCROLL, SB_LINEDOWN, (LPARAM)0);
+                    }
+
+                    PostMessage(hwnd, WM_KEYDOWN, VK_HOME, (LPARAM)0);
                 }
-            } else if (dm.caret.currentPos.modelPos.y < dm.documentArea.lines - 1) {
-                ++dm.caret.currentPos.modelPos.y;
-                dm.caret.currentPos.block = dm.caret.currentPos.block->next;
-                
-                if (dm.caret.clientPos.y < dm.clientArea.lines - 1) {
-                    ++dm.caret.clientPos.y;
-                } else {
-                    PostMessage(hwnd, WM_VSCROLL, SB_LINEDOWN, (LPARAM)0);
-                }
+            #else
+                PostMessage(hwnd, WM_HSCROLL, SB_LINEDOWN, (LPARAM)0);
+            #endif
 
-                PostMessage(hwnd, WM_KEYDOWN, VK_HOME, (LPARAM)0);
-            }
             break;
 
         case VK_PRIOR:
-            PostMessage(hwnd, WM_VSCROLL, SB_PAGEUP, (LPARAM)0);
+            #ifdef CARET_ON
+
+            #else
+                PostMessage(hwnd, WM_VSCROLL, SB_PAGEUP, (LPARAM)0);
+            #endif
             break;
 
         case VK_NEXT:
-            PostMessage(hwnd, WM_VSCROLL, SB_PAGEDOWN, (LPARAM)0);
+            #ifdef CARET_ON
+
+            #else
+                PostMessage(hwnd, WM_VSCROLL, SB_PAGEDOWN, (LPARAM)0);
+            #endif
             break;
 
         case VK_HOME:
-            if (dm.mode == FORMAT_MODE_WRAP) { return; }
+            #ifdef CARET_ON
+                if (dm.mode == FORMAT_MODE_WRAP) { return; }
 
-            if (dm.caret.currentPos.modelPos.x > 0) {
-                size_t deltaModel = dm.caret.currentPos.modelPos.x;
-                size_t deltaClient = dm.caret.clientPos.x;
+                if (dm.caret.currentPos.modelPos.x > 0) {
+                    size_t deltaModel = dm.caret.currentPos.modelPos.x;
+                    size_t deltaClient = dm.caret.clientPos.x;
 
-                if (deltaModel > deltaClient) {
-                    Scroll(hwnd, &dm, deltaModel - deltaClient, LEFT, &rectangle);
+                    if (deltaModel > deltaClient) {
+                        Scroll(hwnd, &dm, deltaModel - deltaClient, LEFT, &rectangle);
+                    }
+                    dm.caret.clientPos.x = 0;
+
+                    dm.caret.currentPos.modelPos.x = 0;
                 }
-                dm.caret.clientPos.x = 0;
 
-                dm.caret.currentPos.modelPos.x = 0;
-            }
-            
-            // FindCaret();
+                // FindCaret();
+            #else
+                PostMessage(hwnd, WM_HSCROLL, SB_PAGEUP, (LPARAM)0);
+            #endif
             break;
 
         case VK_END:
-            if (dm.mode == FORMAT_MODE_WRAP) { return; }
-            
-            if (dm.caret.currentPos.modelPos.x < dm.caret.currentPos.block->data.len - 1) {
-                size_t deltaModel = (dm.caret.currentPos.block->data.len - 1) - dm.caret.currentPos.modelPos.x;
-                size_t deltaClient = (dm.clientArea.chars - 1) - dm.caret.clientPos.x;
+            #ifdef CARET_ON
+                if (dm.mode == FORMAT_MODE_WRAP) { return; }
+                
+                if (dm.caret.currentPos.modelPos.x < dm.caret.currentPos.block->data.len - 1) {
+                    size_t deltaModel = (dm.caret.currentPos.block->data.len - 1) - dm.caret.currentPos.modelPos.x;
+                    size_t deltaClient = (dm.clientArea.chars - 1) - dm.caret.clientPos.x;
 
-                if (deltaModel > deltaClient) {
-                    dm.caret.clientPos.x = dm.clientArea.chars - 1;
-                    Scroll(hwnd, &dm, deltaModel - deltaClient, RIGHT, &rectangle);
-                } else {
-                    dm.caret.clientPos.x += deltaModel;
+                    if (deltaModel > deltaClient) {
+                        dm.caret.clientPos.x = dm.clientArea.chars - 1;
+                        Scroll(hwnd, &dm, deltaModel - deltaClient, RIGHT, &rectangle);
+                    } else {
+                        dm.caret.clientPos.x += deltaModel;
+                    }
+
+                    dm.caret.currentPos.modelPos.x = dm.caret.currentPos.block->data.len - 1;
                 }
 
-                dm.caret.currentPos.modelPos.x = dm.caret.currentPos.block->data.len - 1;
-            }
-
-            // FindCaret();
+                // FindCaret();
+            #else
+                PostMessage(hwnd, WM_HSCROLL, SB_PAGEDOWN, (LPARAM)0);
+            #endif
             break;
 
         default:
             break;
         }
 
-        SetCaretPos(dm.caret.clientPos.x * dm.charMetric.x, dm.caret.clientPos.y * dm.charMetric.y);
+        #ifdef CARET_ON
+            SetCaretPos(dm.caret.clientPos.x * dm.charMetric.x, dm.caret.clientPos.y * dm.charMetric.y);
+        #endif
+
         break;
     // WM_KEYDOWN
 
@@ -563,7 +623,7 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
             }
         }
 
-        SetCaretPos(dm.caret.clientPos.x * dm.charMetric.x, dm.caret.clientPos.y * dm.charMetric.y);
+        // SetCaretPos(dm.caret.clientPos.x * dm.charMetric.x, dm.caret.clientPos.y * dm.charMetric.y);
         break;
     // WM_CHAR
 

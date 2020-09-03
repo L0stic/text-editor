@@ -1,11 +1,10 @@
 #include "ScrollBar.h"
 
-#define CAMERA_MODE MANY_LINES
-
-typedef enum {
-    ONE_LINE,
-    MANY_LINES
-} CameraMode;
+/*  CAMERA_MODE params:
+*     * ONE_LINE    - expanded area (you can highlight one character);
+*     * MANY_LINES  - text fills all the free space.
+*/
+#define CAMERA_MODE ONE_LINE
 
 void InitScrollBar(ScrollBar* pSB) {
     assert(pSB);
@@ -16,7 +15,6 @@ void InitScrollBar(ScrollBar* pSB) {
 
 static ScrollBar GetRelativeSB(ScrollBar* pSB) {
     assert(pSB && pSB->pos <= pSB->maxPos);
-    assert(CAMERA_MODE == ONE_LINE || CAMERA_MODE == MANY_LINES);
 
     ScrollBar relativeSB;
 
@@ -58,9 +56,10 @@ size_t GetAbsoluteMaxPos(size_t modelAreaParam, size_t clientAreaParam) {
 
     if (!modelAreaParam) { return 0; }
 
-    if (CAMERA_MODE == MANY_LINES) {
+    #if CAMERA_MODE == MANY_LINES
         shift = modelAreaParam < clientAreaParam ? modelAreaParam : clientAreaParam;
-    }
+    #endif
+
     return modelAreaParam - shift;
 }
 

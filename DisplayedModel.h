@@ -7,6 +7,7 @@
 #include <math.h>
 #include <limits.h>
 
+#include "Caret.h"
 #include "ScrollBar.h"
 #include "Document.h"
 
@@ -69,6 +70,7 @@ typedef struct {
     } scrollBars;
     
     struct {
+        int isHidden;
         position_t clientPos;
         
         CurrentPos currentPos;
@@ -88,6 +90,6 @@ void CoverDocument(HWND hwnd, DisplayedModel* dm, Document* doc);
 void SwitchMode(HWND hwnd, DisplayedModel* dm, FormatMode mode);
 void DisplayModel(HDC hdc, const DisplayedModel* dm);
 
-void Scroll(HWND hwnd, DisplayedModel* dm, size_t count, Direction dir, RECT* rectangle);
+int Scroll(HWND hwnd, DisplayedModel* dm, size_t count, Direction dir, RECT* rectangle);
 size_t GetCurrentPos(int pos, size_t requiredMax);
 #endif // DISPLAYED_MODEL_H_INCLUDED
