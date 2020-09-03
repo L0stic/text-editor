@@ -2,14 +2,20 @@
 #ifndef DISPLAYED_MODEL_H_INCLUDED
 #define DISPLAYED_MODEL_H_INCLUDED
 
+// #define CARET_ON
+#define CARET_OFF
+
 #include <windows.h>
 #include <assert.h>
 #include <math.h>
 #include <limits.h>
 
-#include "Caret.h"
-#include "ScrollBar.h"
 #include "Document.h"
+#include "ScrollBar.h"
+
+#ifdef CARET_ON
+    #include "Caret.h"
+#endif
 
 typedef enum {
     FORMAT_MODE_DEFAULT,
@@ -49,8 +55,8 @@ typedef struct {
 
 typedef struct {
     Block* block;
-    position_t modelPos;
-} CurrentPos;
+    position_t pos;
+} ModelPos;
 
 typedef struct {
     metric_t charMetric;
@@ -65,22 +71,16 @@ typedef struct {
     struct {
         ScrollBar horizontal;
         ScrollBar vertical;
-
-        CurrentPos currentPos;
+        ModelPos modelPos;
     } scrollBars;
-    
-    struct {
-        int isHidden;
-        position_t clientPos;
-        
-        CurrentPos currentPos;
-    } caret;
 
-    struct {
-        Block* block;
-        size_t blockPos;
-        size_t charPos;
-    } currentPos;
+    #ifdef CARET_ON
+        struct {
+            int isHidden;
+            position_t clientPos;
+            ModelPos modelPos;
+        } caret;
+    #endif
 } DisplayedModel;
 
 void InitDisplayedModel(DisplayedModel* dm, TEXTMETRIC* tm);
@@ -90,6 +90,9 @@ void CoverDocument(HWND hwnd, DisplayedModel* dm, Document* doc);
 void SwitchMode(HWND hwnd, DisplayedModel* dm, FormatMode mode);
 void DisplayModel(HDC hdc, const DisplayedModel* dm);
 
+// Scroll-bar
 int Scroll(HWND hwnd, DisplayedModel* dm, size_t count, Direction dir, RECT* rectangle);
-size_t GetCurrentPos(int pos, size_t requiredMax);
+
+// Caret
+
 #endif // DISPLAYED_MODEL_H_INCLUDED

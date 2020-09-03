@@ -1,10 +1,22 @@
 #include "DisplayedModel.h"
 
+static void InitModelPos(ModelPos* pMP, Block* block) {
+    assert(pMP);
+
+    pMP->block = block;
+    pMP->pos.x = 0;
+    pMP->pos.y = 0;
+}
+
 void InitDisplayedModel(DisplayedModel* dm, TEXTMETRIC* tm) {
-    assert(dm && tm);
+    assert(dm);
+    assert(tm);
 
     dm->charMetric.x = tm->tmAveCharWidth;
     dm->charMetric.y = tm->tmHeight + tm->tmExternalLeading;
+
+    dm->mode = FORMAT_MODE_DEFAULT;
+    dm->doc = NULL;
 
     dm->clientArea.chars = 0;
     dm->clientArea.lines = 0;
@@ -17,26 +29,20 @@ void InitDisplayedModel(DisplayedModel* dm, TEXTMETRIC* tm) {
 
     InitScrollBar(&(dm->scrollBars.horizontal));
     InitScrollBar(&(dm->scrollBars.vertical));
+    InitModelPos(&(dm->scrollBars.modelPos), NULL);
 
-    dm->caret.isHidden = 1;
-    dm->caret.currentPos.block = NULL;
-    dm->caret.currentPos.modelPos.x = 0;
-    dm->caret.currentPos.modelPos.y = 0;
-    dm->caret.clientPos.x = 0;
-    dm->caret.clientPos.y = 0;
-
-    dm->mode = FORMAT_MODE_DEFAULT;
-    dm->doc = NULL;
-
-    dm->currentPos.block = NULL;
-    dm->currentPos.blockPos = 0;
-    dm->currentPos.charPos = 0;
+    #ifdef CARET_ON
+        dm->caret.isHidden = 1;
+        dm->caret.clientPos.x = 0;
+        dm->caret.clientPos.y = 0;
+        InitModelPos(&(dm->caret.modelPos), NULL);
+    #endif
 }
 
 
 static void PrintWrapModel(WrapModel* wrapModel) {
     if (wrapModel->isValid) {
-        printf("Wrap model: %i\n", wrapModel->lines);
+        printf("Wrap model: %u\n", wrapModel->lines);
     } else {
         printf("Wrap model is not valid\n");
     }
@@ -45,17 +51,19 @@ static void PrintWrapModel(WrapModel* wrapModel) {
 static size_t BuildWrapModel(DisplayedModel* dm) {
     printf("BuildWrapModel\n");
     assert(dm);
-    size_t relativePos;
+    
+    size_t relativePos; // absolute?
     Block* block = dm->doc->blocks->nodes;
 
-    dm->currentPos.charPos = 0;
+    dm->scrollBars.modelPos.pos.x = 0;
+
     dm->wrapModel.lines = 0;
 
-    while (block != dm->currentPos.block) {
+    while (block != dm->scrollBars.modelPos.block) {
         if (block->data.len > 0) {
             dm->wrapModel.lines += DIV_WITH_ROUND_UP(block->data.len, dm->clientArea.chars);
         } else {
-            ++(dm->wrapModel.lines);
+            ++dm->wrapModel.lines;
         }
         block = block->next;
     }
@@ -66,7 +74,7 @@ static size_t BuildWrapModel(DisplayedModel* dm) {
         if (block->data.len > 0) {
             dm->wrapModel.lines += DIV_WITH_ROUND_UP(block->data.len, dm->clientArea.chars);
         } else {
-            ++(dm->wrapModel.lines);
+            ++dm->wrapModel.lines;
         }
         block = block->next;
     }
@@ -83,24 +91,22 @@ static void PrintScrollBar(const ScrollBar* pSB) {
 
 static void CheckScrollBar(const HWND hwnd) {
     int pos, bottom, top;
+
     pos = GetScrollPos(hwnd, SB_HORZ);
     GetScrollRange(hwnd, SB_HORZ, &bottom, &top);
     printf("Relative: pos = %i of [%i; %i]\n", pos, bottom, top);
 }
 
 
-static void UpdateVerticalSB(DisplayedModel* dm) {
+static void UpdateVerticalSB_Default(DisplayedModel* dm) {
     assert(dm);
-    dm->scrollBars.vertical.maxPos = GetAbsoluteMaxPos(dm->documentArea.lines + 1, dm->clientArea.lines);
+    dm->scrollBars.vertical.maxPos = GetAbsoluteMaxPos(dm->documentArea.lines, dm->clientArea.lines);
 
-    printf("%u\n", dm->scrollBars.vertical.maxPos);
-    printf("%u\n", dm->scrollBars.vertical.pos);
     if (dm->scrollBars.vertical.pos > dm->scrollBars.vertical.maxPos) {
         // pass
         for(size_t delta = dm->scrollBars.vertical.pos - dm->scrollBars.vertical.maxPos; delta > 0; --delta) {
-            printf("%u\n", delta);
-            --(dm->currentPos.blockPos);
-            dm->currentPos.block = dm->currentPos.block->prev;
+            --dm->scrollBars.modelPos.pos.y;
+            dm->scrollBars.modelPos.block = dm->scrollBars.modelPos.block->prev;
         }
         dm->scrollBars.vertical.pos = dm->scrollBars.vertical.maxPos;
     }
@@ -109,25 +115,25 @@ static void UpdateVerticalSB(DisplayedModel* dm) {
 
 static void UpdateVerticalSB_Wrap(DisplayedModel* dm) {
     assert(dm);
-    dm->scrollBars.vertical.maxPos = GetAbsoluteMaxPos(dm->wrapModel.lines + 1, dm->clientArea.lines);
+    dm->scrollBars.vertical.maxPos = GetAbsoluteMaxPos(dm->wrapModel.lines, dm->clientArea.lines);
 
     if (dm->scrollBars.vertical.pos > dm->scrollBars.vertical.maxPos) {
         // pass
         for (size_t delta = dm->scrollBars.vertical.pos - dm->scrollBars.vertical.maxPos; delta > 0;) {
-            if (dm->currentPos.charPos + 1 <= delta) {
-                delta -= dm->currentPos.charPos + 1;
+            if (dm->scrollBars.modelPos.pos.x + 1 <= delta) {
+                delta -= dm->scrollBars.modelPos.pos.x + 1;
             } else {
-                dm->currentPos.charPos -= delta;
+                dm->scrollBars.modelPos.pos.x -= delta;
                 break;
             }
 
             // prev block
-            dm->currentPos.block = dm->currentPos.block->prev;
-            --(dm->currentPos.blockPos);
-            if (dm->currentPos.block->data.len > 0) {
-                dm->currentPos.charPos = DIV_WITH_ROUND_UP(dm->currentPos.block->data.len, dm->clientArea.chars) - 1;
+            dm->scrollBars.modelPos.block = dm->scrollBars.modelPos.block->prev;
+            --dm->scrollBars.modelPos.pos.y;
+            if (dm->scrollBars.modelPos.block->data.len > 0) {
+                dm->scrollBars.modelPos.pos.x = DIV_WITH_ROUND_UP(dm->scrollBars.modelPos.block->data.len, dm->clientArea.chars) - 1;
             } else {
-                dm->currentPos.charPos = 0;
+                dm->scrollBars.modelPos.pos.x = 0;
             }
         }
         dm->scrollBars.vertical.pos = dm->scrollBars.vertical.maxPos;
@@ -139,10 +145,23 @@ void UpdateDisplayedModel(HWND hwnd, DisplayedModel* dm, LPARAM lParam) {
     printf("UpdateDisplayedModel\n");
     assert(dm);
 
-    size_t chars = DIV_WITH_ROUND_UP(LOWORD(lParam), dm->charMetric.x);
+    size_t chars;
     size_t lines = DIV_WITH_ROUND_UP(HIWORD(lParam), dm->charMetric.y);
     int isCharsChanged = 0;
     int isLinesChanged = 0;
+
+    switch (dm->mode) {
+    case FORMAT_MODE_DEFAULT:
+        chars = DIV_WITH_ROUND_UP(LOWORD(lParam), dm->charMetric.x);
+        break;
+
+    case FORMAT_MODE_WRAP:
+        chars = LOWORD(lParam) / dm->charMetric.x;
+        break;
+
+    default:
+        return;
+    }
 
     if (dm->clientArea.chars != chars) {
         dm->clientArea.chars = chars;
@@ -160,7 +179,7 @@ void UpdateDisplayedModel(HWND hwnd, DisplayedModel* dm, LPARAM lParam) {
     case FORMAT_MODE_DEFAULT:
         // Horizontal scroll-bar
         if (isCharsChanged) {
-            dm->scrollBars.horizontal.maxPos = GetAbsoluteMaxPos(dm->documentArea.chars + 1, dm->clientArea.chars);
+            dm->scrollBars.horizontal.maxPos = GetAbsoluteMaxPos(dm->documentArea.chars, dm->clientArea.chars);
 
             if (dm->scrollBars.horizontal.pos > dm->scrollBars.horizontal.maxPos) {
                 dm->scrollBars.horizontal.pos = dm->scrollBars.horizontal.maxPos;
@@ -168,12 +187,13 @@ void UpdateDisplayedModel(HWND hwnd, DisplayedModel* dm, LPARAM lParam) {
         }
 
         // Vertical scroll-bar
-        if (isLinesChanged) { UpdateVerticalSB(dm); }
+        if (isLinesChanged) { UpdateVerticalSB_Default(dm); }
         break;
     // FORMAT_MODE_DEFAULT
 
     case FORMAT_MODE_WRAP:
         PrintWrapModel(&(dm->wrapModel));
+
         // Horizontal scroll-bar
         if (dm->documentArea.chars >= dm->clientArea.chars && isCharsChanged) {
             dm->scrollBars.horizontal.maxPos = 0;
@@ -209,22 +229,18 @@ void CoverDocument(HWND hwnd, DisplayedModel* dm, Document* doc) {
 
     dm->wrapModel.isValid = 0;
 
-    // can be optimized
     InitScrollBar(&(dm->scrollBars.horizontal));
     InitScrollBar(&(dm->scrollBars.vertical));
+    InitModelPos(&(dm->scrollBars.modelPos), doc->blocks->nodes);
 
-    dm->currentPos.block = doc->blocks->nodes;
-    dm->currentPos.blockPos = 0;
-    dm->currentPos.charPos = 0;
-
-    dm->caret.currentPos.block = doc->blocks->nodes;
-    dm->caret.currentPos.modelPos.x = 0;
-    dm->caret.currentPos.modelPos.y = 0;
+    #ifdef CARET_ON
+        InitModelPos(&(dm->caret.modelPos), doc->blocks->nodes);
+    #endif
 
     switch (dm->mode) {
     case FORMAT_MODE_DEFAULT:
-        dm->scrollBars.horizontal.maxPos = GetAbsoluteMaxPos(dm->documentArea.chars + 1, dm->clientArea.chars);
-        dm->scrollBars.vertical.maxPos = GetAbsoluteMaxPos(dm->documentArea.lines + 1, dm->clientArea.lines);
+        dm->scrollBars.horizontal.maxPos = GetAbsoluteMaxPos(dm->documentArea.chars, dm->clientArea.chars);
+        dm->scrollBars.vertical.maxPos = GetAbsoluteMaxPos(dm->documentArea.lines, dm->clientArea.lines);
         break;
 
     case FORMAT_MODE_WRAP:
@@ -232,7 +248,7 @@ void CoverDocument(HWND hwnd, DisplayedModel* dm, Document* doc) {
 
         BuildWrapModel(dm);
         PrintWrapModel(&(dm->wrapModel));
-        dm->scrollBars.vertical.maxPos = GetAbsoluteMaxPos(dm->wrapModel.lines + 1, dm->clientArea.lines);
+        dm->scrollBars.vertical.maxPos = GetAbsoluteMaxPos(dm->wrapModel.lines, dm->clientArea.lines);
         break;
 
     default:
@@ -255,14 +271,14 @@ void CoverDocument(HWND hwnd, DisplayedModel* dm, Document* doc) {
 
 static void PrintPos(DisplayedModel* dm) {
     assert(dm);
-    printf("blockPos = %i, ", dm->currentPos.blockPos);
-    printf("charPos = %i\n", dm->currentPos.charPos);
+    printf("blockPos = %u, ", dm->scrollBars.modelPos.pos.y);
+    printf("charPos = %u\n", dm->scrollBars.modelPos.pos.x);
 }
 
 
 void SwitchMode(HWND hwnd, DisplayedModel* dm, FormatMode mode) {
-    assert(dm);
     printf("Switch mode\n");
+    assert(dm);
 
     dm->scrollBars.horizontal.pos = 0;
     #ifndef DEBUG // ====/
@@ -273,19 +289,19 @@ void SwitchMode(HWND hwnd, DisplayedModel* dm, FormatMode mode) {
     case FORMAT_MODE_DEFAULT:
         printf("Default mode is activated\n");
         dm->mode = FORMAT_MODE_DEFAULT;
+        ++dm->clientArea.chars;
 
-        dm->scrollBars.horizontal.maxPos = GetAbsoluteMaxPos(dm->documentArea.chars + 1, dm->clientArea.chars);
+        dm->scrollBars.horizontal.maxPos = GetAbsoluteMaxPos(dm->documentArea.chars, dm->clientArea.chars);
 
-        dm->scrollBars.vertical.pos = dm->currentPos.blockPos;
-        UpdateVerticalSB(dm);
-
+        dm->scrollBars.vertical.pos = dm->scrollBars.modelPos.pos.y;
+        UpdateVerticalSB_Default(dm);
         break;
 
     case FORMAT_MODE_WRAP:
         printf("Wrap mode is activated\n");
         dm->mode = FORMAT_MODE_WRAP;
+        --dm->clientArea.chars;
 
-        dm->currentPos.charPos = 0;
         dm->scrollBars.horizontal.maxPos = GetAbsoluteMaxPos(0, dm->clientArea.chars);
 
         dm->scrollBars.vertical.pos = BuildWrapModel(dm);
@@ -307,18 +323,19 @@ void SwitchMode(HWND hwnd, DisplayedModel* dm, FormatMode mode) {
 
 void DisplayModel(HDC hdc, const DisplayedModel* dm) {
     assert(dm && dm->doc && dm->doc->text);
-    Block* block = dm->currentPos.block;
+
+    Block* block = dm->scrollBars.modelPos.block;
     size_t displayedLines, displayedChars;
     size_t linesBlock, nextLine;
 
-    #ifndef DEBUG
+    #ifndef DEBUG // ================================/
         printf("Display model:\n");
         printf("\tHorizontal\n");
         PrintScrollBar(&(dm->scrollBars.horizontal));
         printf("\tVertical\n");
         PrintScrollBar(&(dm->scrollBars.vertical));
         putchar('\n');
-    #endif
+    #endif // =======================================/
 
     switch (dm->mode) {
     case FORMAT_MODE_DEFAULT:
@@ -340,10 +357,11 @@ void DisplayModel(HDC hdc, const DisplayedModel* dm) {
         break;
 
     case FORMAT_MODE_WRAP:
-        nextLine = dm->currentPos.charPos;
+        nextLine = dm->scrollBars.modelPos.pos.x;
+
         displayedLines = min(dm->clientArea.lines, dm->wrapModel.lines - dm->scrollBars.vertical.pos);
 
-        block = dm->currentPos.block;
+        block = dm->scrollBars.modelPos.block;
 
         // print
         for (size_t i = 0; i < displayedLines; nextLine = 0) {
@@ -390,19 +408,111 @@ void DisplayModel(HDC hdc, const DisplayedModel* dm) {
     }
 }
 
+static void UpdateScrollPos_Back(DisplayedModel* dm, size_t count) {
+    assert(dm);
+
+    switch (dm->mode) {
+    case FORMAT_MODE_DEFAULT:
+        // for remaining
+        while (dm->scrollBars.modelPos.pos.y != dm->scrollBars.vertical.pos) {
+            dm->scrollBars.modelPos.block = dm->scrollBars.modelPos.block->prev;
+            --dm->scrollBars.modelPos.pos.y;
+        }
+        break;
+
+    case FORMAT_MODE_WRAP:
+        // for remaining
+        for (; count > 0;) {
+            if (dm->scrollBars.modelPos.pos.x + 1 <= count) {
+                count -= dm->scrollBars.modelPos.pos.x + 1;
+            } else {
+                dm->scrollBars.modelPos.pos.x -= count;
+                break;
+            }
+
+            // prev block
+            dm->scrollBars.modelPos.block = dm->scrollBars.modelPos.block->prev;
+            --(dm->scrollBars.modelPos.pos.y);
+            if (dm->scrollBars.modelPos.block->data.len > 0) {
+                dm->scrollBars.modelPos.pos.x = DIV_WITH_ROUND_UP(dm->scrollBars.modelPos.block->data.len, dm->clientArea.chars) - 1;
+            } else {
+                dm->scrollBars.modelPos.pos.x = 0;
+            }
+        }
+        break;
+
+    default:
+        break;
+    }
+}
+
+static void UpdateScrollPos_Forward(DisplayedModel* dm, size_t count) {
+    assert(dm);
+
+    size_t delta;
+    size_t linesBlock = 0;
+    Block* block = dm->scrollBars.modelPos.block;    
+
+    switch (dm->mode) {
+    case FORMAT_MODE_DEFAULT:
+        // for remaining
+        while (dm->scrollBars.modelPos.pos.y != dm->scrollBars.vertical.pos) {
+            dm->scrollBars.modelPos.block = dm->scrollBars.modelPos.block->next;
+            ++dm->scrollBars.modelPos.pos.y;
+        }
+        break;
+
+    case FORMAT_MODE_WRAP:
+        // for remaining
+        if (block->data.len > 0) {
+            linesBlock = DIV_WITH_ROUND_UP(block->data.len, dm->clientArea.chars);
+        } else {
+            linesBlock = 1;
+        }
+
+        delta = linesBlock - dm->scrollBars.modelPos.pos.x;
+        dm->scrollBars.modelPos.pos.x = 0;
+
+        for (; count > 0; linesBlock = 0) {
+            if (count >= delta) {
+                count -= delta;
+            } else {
+                dm->scrollBars.modelPos.pos.x = linesBlock - (delta - count);
+                break;
+            }
+
+            block = block->next;
+
+            // next block
+            dm->scrollBars.modelPos.block = block;
+            ++dm->scrollBars.modelPos.pos.y;
+
+            if (block->data.len > 0) {
+                linesBlock = DIV_WITH_ROUND_UP(block->data.len, dm->clientArea.chars);
+            } else {
+                linesBlock = 1;
+            }
+            delta = linesBlock;
+        }
+        break;
+
+    default:
+        break;
+    }
+}
 
 int Scroll(HWND hwnd, DisplayedModel* dm, size_t count, Direction direction, RECT* rectangle) {
     assert(dm);
     assert(rectangle);
 
-    // TODO: update window scroll
+    int xScroll = 0;
+    int yScroll = 0;
+
+    // Init rectangle
     rectangle->left = 0;
     rectangle->right = dm->charMetric.x * dm->clientArea.chars;
-
     rectangle->top = 0;
     rectangle->bottom = dm->charMetric.y * dm->clientArea.lines;
-
-    // rectangle = NULL;
 
     switch (direction) {
     case UP:
@@ -411,44 +521,10 @@ int Scroll(HWND hwnd, DisplayedModel* dm, size_t count, Direction direction, REC
 
         dm->scrollBars.vertical.pos -= count;
 
-        switch (dm->mode) {
-        case FORMAT_MODE_DEFAULT:
-            // for remaining
-            while (dm->currentPos.blockPos != dm->scrollBars.vertical.pos) {
-                dm->currentPos.block = dm->currentPos.block ? dm->currentPos.block->prev : dm->doc->blocks->last;
-                --(dm->currentPos.blockPos);
-            }
-            break;
-
-        case FORMAT_MODE_WRAP:
-            // for remaining
-            for (; count > 0;) {
-                if (dm->currentPos.charPos + 1 <= count) {
-                    count -= dm->currentPos.charPos + 1;
-                } else {
-                    dm->currentPos.charPos -= count;
-                    break;
-                }
-
-                // prev block
-                dm->currentPos.block = dm->currentPos.block->prev;
-                --(dm->currentPos.blockPos);
-                if (dm->currentPos.block->data.len > 0) {
-                    dm->currentPos.charPos = DIV_WITH_ROUND_UP(dm->currentPos.block->data.len, dm->clientArea.chars) - 1;
-                } else {
-                    dm->currentPos.charPos = 0;
-                }
-            }
-            break;
-
-        default:
-            break;
-        }
-
+        UpdateScrollPos_Back(dm, count);
         SetRelativePos(hwnd, &(dm->scrollBars.vertical), SB_VERT);
 
-        // TODO: update vertical window scroll
-        ScrollWindow(hwnd, 0, count * dm->charMetric.y, NULL, NULL);
+        yScroll = (int) (count * dm->charMetric.y);
         rectangle->bottom = dm->charMetric.y * min(count, dm->clientArea.lines);
         break;
     // UP
@@ -459,57 +535,10 @@ int Scroll(HWND hwnd, DisplayedModel* dm, size_t count, Direction direction, REC
 
         dm->scrollBars.vertical.pos += count;
 
-        switch (dm->mode) {
-        case FORMAT_MODE_DEFAULT:
-            // for remaining
-            while (dm->currentPos.blockPos != dm->scrollBars.vertical.pos) {
-                dm->currentPos.block = dm->currentPos.block->next;
-                ++(dm->currentPos.blockPos);
-            }
-            break;
-
-        case FORMAT_MODE_WRAP: {
-            Block* block = dm->currentPos.block;
-            size_t delta;
-            size_t linesBlock = 0;
-
-            // for remaining
-            if (block->data.len > 0) {
-                linesBlock = DIV_WITH_ROUND_UP(block->data.len, dm->clientArea.chars);
-            } else {
-                linesBlock = 1;
-            }
-            delta = linesBlock - dm->currentPos.charPos;
-            dm->currentPos.charPos = 0;
-            for (; count > 0; linesBlock = 0) {
-                if (count >= delta) {
-                    count -= delta;
-                } else {
-                    dm->currentPos.charPos = linesBlock - (delta - count);
-                    break;
-                }
-
-                block = block->next;
-
-                // next block
-                dm->currentPos.block = block;
-                ++(dm->currentPos.blockPos);
-
-                if (block->data.len > 0) {
-                    linesBlock = DIV_WITH_ROUND_UP(block->data.len, dm->clientArea.chars);
-                } else {
-                    linesBlock = 1;
-                }
-                delta = linesBlock;
-            }
-        }
-            break;
-        }
-
+        UpdateScrollPos_Forward(dm, count);
         SetRelativePos(hwnd, &(dm->scrollBars.vertical), SB_VERT);
 
-        // TODO: update vertical window scroll
-        ScrollWindow(hwnd, 0, -count * dm->charMetric.y, NULL, NULL);
+        yScroll = - (int) (count * dm->charMetric.y);
         rectangle->top = dm->charMetric.y * (dm->clientArea.lines - min(count, dm->clientArea.lines));
         break;
     // DOWN
@@ -523,8 +552,7 @@ int Scroll(HWND hwnd, DisplayedModel* dm, size_t count, Direction direction, REC
         dm->scrollBars.horizontal.pos -= count;
         SetRelativePos(hwnd, &(dm->scrollBars.horizontal), SB_HORZ);
 
-        // TODO: update horizonatl window scroll
-        ScrollWindow(hwnd, count * dm->charMetric.x, 0, NULL, NULL);
+        xScroll = (int) (count * dm->charMetric.x);
         rectangle->left = dm->charMetric.x * (dm->clientArea.chars - min(count, dm->clientArea.chars));
         break;
     // LEFT
@@ -538,8 +566,7 @@ int Scroll(HWND hwnd, DisplayedModel* dm, size_t count, Direction direction, REC
         dm->scrollBars.horizontal.pos += count;
         SetRelativePos(hwnd, &(dm->scrollBars.horizontal), SB_HORZ);
 
-        // TODO: update horizonatl window scroll
-        ScrollWindow(hwnd, -count * dm->charMetric.x, 0, NULL, NULL);
+        xScroll = - (int) (count * dm->charMetric.x);
         rectangle->right = dm->charMetric.x * min(count, dm->clientArea.chars);
         break;
     // RIGHT
@@ -549,17 +576,17 @@ int Scroll(HWND hwnd, DisplayedModel* dm, size_t count, Direction direction, REC
         return -1;
     }
 
-    #ifndef DEBUG // ==============================================/
-        PrintPos(dm);
-    #endif // =====================================================/
+    ScrollWindow(hwnd, xScroll, yScroll, NULL, NULL);
 
+    // Repaint rectangle
     InvalidateRect(hwnd, rectangle, TRUE);
     UpdateWindow(hwnd);
 
-    #ifndef DEBUG
+    #ifndef DEBUG // ==============================================/
+        PrintPos(dm);
         PrintScrollBar(&(dm->scrollBars.vertical));
         PrintScrollBar(&(dm->scrollBars.horizontal));
-    #endif
+    #endif // =====================================================/
 
     return count;
 }

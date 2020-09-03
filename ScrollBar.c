@@ -4,7 +4,8 @@
 *     * ONE_LINE    - expanded area (you can highlight one character);
 *     * MANY_LINES  - text fills all the free space.
 */
-#define CAMERA_MODE ONE_LINE
+// #define ONE_LINE
+#define MANY_LINES
 
 void InitScrollBar(ScrollBar* pSB) {
     assert(pSB);
@@ -56,8 +57,10 @@ size_t GetAbsoluteMaxPos(size_t modelAreaParam, size_t clientAreaParam) {
 
     if (!modelAreaParam) { return 0; }
 
-    #if CAMERA_MODE == MANY_LINES
-        shift = modelAreaParam < clientAreaParam ? modelAreaParam : clientAreaParam;
+    if (clientAreaParam == 1) { return modelAreaParam - 1; }
+
+    #ifdef MANY_LINES
+        shift = modelAreaParam < clientAreaParam ? modelAreaParam : (clientAreaParam - 1);
     #endif
 
     return modelAreaParam - shift;
