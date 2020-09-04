@@ -1,5 +1,7 @@
 #include "DisplayedModel.h"
 
+#define STEP 1
+
 static void InitModelPos(ModelPos* pMP, Block* block) {
     assert(pMP);
 
@@ -32,7 +34,8 @@ void InitDisplayedModel(DisplayedModel* dm, TEXTMETRIC* tm) {
     InitModelPos(&(dm->scrollBars.modelPos), NULL);
 
     #ifdef CARET_ON
-        dm->caret.isHidden = 1;
+        dm->caret.isHidden.x = 0;
+        dm->caret.isHidden.y = 0;
         dm->caret.clientPos.x = 0;
         dm->caret.clientPos.y = 0;
         InitModelPos(&(dm->caret.modelPos), NULL);
@@ -234,6 +237,10 @@ void CoverDocument(HWND hwnd, DisplayedModel* dm, Document* doc) {
     InitModelPos(&(dm->scrollBars.modelPos), doc->blocks->nodes);
 
     #ifdef CARET_ON
+        dm->caret.isHidden.x = 0;
+        dm->caret.isHidden.y = 0;
+        dm->caret.clientPos.x = 0;
+        dm->caret.clientPos.y = 0;
         InitModelPos(&(dm->caret.modelPos), doc->blocks->nodes);
     #endif
 
@@ -260,11 +267,11 @@ void CoverDocument(HWND hwnd, DisplayedModel* dm, Document* doc) {
     SetRelativeParam(hwnd, &(dm->scrollBars.vertical), SB_VERT);
 
     #ifndef DEBUG // ================================/
-        printf("\tHorizontal\n");
-        PrintScrollBar(&(dm->scrollBars.horizontal));
-        printf("\tVertical\n");
-        PrintScrollBar(&(dm->scrollBars.vertical));
-        putchar('\n');
+        // printf("\tHorizontal\n");
+        // PrintScrollBar(&(dm->scrollBars.horizontal));
+        // printf("\tVertical\n");
+        // PrintScrollBar(&(dm->scrollBars.vertical));
+        // putchar('\n');
     #endif // =======================================/
 }
 
@@ -282,7 +289,7 @@ void SwitchMode(HWND hwnd, DisplayedModel* dm, FormatMode mode) {
 
     dm->scrollBars.horizontal.pos = 0;
     #ifndef DEBUG // ====/
-        PrintPos(dm);
+        // PrintPos(dm);
     #endif // ===========/
 
     switch(mode) {
@@ -317,7 +324,7 @@ void SwitchMode(HWND hwnd, DisplayedModel* dm, FormatMode mode) {
     SetRelativeParam(hwnd, &(dm->scrollBars.vertical), SB_VERT);
 
     #ifndef DEBUG // ====/
-        PrintPos(dm);
+        // PrintPos(dm);
     #endif // ===========/
 }
 
@@ -329,12 +336,12 @@ void DisplayModel(HDC hdc, const DisplayedModel* dm) {
     size_t linesBlock, nextLine;
 
     #ifndef DEBUG // ================================/
-        printf("Display model:\n");
-        printf("\tHorizontal\n");
-        PrintScrollBar(&(dm->scrollBars.horizontal));
-        printf("\tVertical\n");
-        PrintScrollBar(&(dm->scrollBars.vertical));
-        putchar('\n');
+        // printf("Display model:\n");
+        // printf("\tHorizontal\n");
+        // PrintScrollBar(&(dm->scrollBars.horizontal));
+        // printf("\tVertical\n");
+        // PrintScrollBar(&(dm->scrollBars.vertical));
+        // putchar('\n');
     #endif // =======================================/
 
     switch (dm->mode) {
@@ -501,7 +508,7 @@ static void UpdateScrollPos_Forward(DisplayedModel* dm, size_t count) {
     }
 }
 
-int Scroll(HWND hwnd, DisplayedModel* dm, size_t count, Direction direction, RECT* rectangle) {
+size_t Scroll(HWND hwnd, DisplayedModel* dm, size_t count, Direction direction, RECT* rectangle) {
     assert(dm);
     assert(rectangle);
 
@@ -573,7 +580,7 @@ int Scroll(HWND hwnd, DisplayedModel* dm, size_t count, Direction direction, REC
 
     default:
     // TODO: error
-        return -1;
+        return 0;
     }
 
     ScrollWindow(hwnd, xScroll, yScroll, NULL, NULL);
@@ -583,10 +590,170 @@ int Scroll(HWND hwnd, DisplayedModel* dm, size_t count, Direction direction, REC
     UpdateWindow(hwnd);
 
     #ifndef DEBUG // ==============================================/
-        PrintPos(dm);
-        PrintScrollBar(&(dm->scrollBars.vertical));
-        PrintScrollBar(&(dm->scrollBars.horizontal));
+        // PrintPos(dm);
+        // PrintScrollBar(&(dm->scrollBars.vertical));
+        // PrintScrollBar(&(dm->scrollBars.horizontal));
     #endif // =====================================================/
 
     return count;
+}
+
+void FindEnd_Left(HWND hwnd, DisplayedModel* dm, RECT* rectangle) {
+    assert(dm && rectangle);
+
+    if (dm->caret.modelPos.pos.x > dm->caret.modelPos.block->data.len) {
+        size_t deltaModel = dm->caret.modelPos.pos.x - dm->caret.modelPos.block->data.len;
+
+        if (dm->caret.clientPos.x < deltaModel) {
+            Scroll(hwnd, dm, deltaModel - dm->caret.clientPos.x, LEFT, rectangle);
+            dm->caret.clientPos.x = 0;
+        } else {
+            dm->caret.clientPos.x -= deltaModel;
+        }
+
+        dm->caret.modelPos.pos.x = dm->caret.modelPos.block->data.len;
+    }
+}
+
+void FindEnd_Right(HWND hwnd, DisplayedModel* dm, RECT* rectangle) {
+    assert(dm && rectangle);
+
+    if (dm->caret.modelPos.pos.x < dm->caret.modelPos.block->data.len) {
+        size_t deltaModel = dm->caret.modelPos.block->data.len - dm->caret.modelPos.pos.x;
+        size_t deltaClient = (dm->clientArea.chars - 1) - dm->caret.clientPos.x;
+
+        if (deltaModel > deltaClient) {
+            Scroll(hwnd, dm, deltaModel - deltaClient, RIGHT, rectangle);
+            dm->caret.clientPos.x = dm->clientArea.chars - 1;
+        } else {
+            dm->caret.clientPos.x += deltaModel;
+        }
+
+        dm->caret.modelPos.pos.x = dm->caret.modelPos.block->data.len;
+    }
+}
+
+void FindHome(HWND hwnd, DisplayedModel* dm, RECT* rectangle) {
+    assert(dm && rectangle);
+
+    if (dm->caret.modelPos.pos.x > 0) {
+        size_t deltaModel = dm->caret.modelPos.pos.x;
+        size_t deltaClient = dm->caret.clientPos.x;
+
+        if (deltaModel > deltaClient) {
+            Scroll(hwnd, &dm, deltaModel - deltaClient, LEFT, &rectangle);
+        }
+        dm->caret.clientPos.x = 0;
+
+        dm->caret.modelPos.pos.x = 0;
+    }
+}
+
+void HandleTop(HWND hwnd, DisplayedModel* dm, RECT* rectangle) {
+    assert(dm && rectangle);
+
+    --dm->caret.modelPos.pos.y;
+    dm->caret.modelPos.block = dm->caret.modelPos.block->prev;
+    
+    if (dm->caret.clientPos.y > 0) {
+        --dm->caret.clientPos.y;
+    } else {
+        Scroll(hwnd, dm, STEP, UP, rectangle);
+    }
+}
+
+void HandleBottom(HWND hwnd, DisplayedModel* dm, RECT* rectangle) {
+    assert(dm && rectangle);
+
+    ++dm->caret.modelPos.pos.y;
+    dm->caret.modelPos.block = dm->caret.modelPos.block->next;
+    
+    if (dm->caret.clientPos.y < dm->clientArea.lines - 2) {
+        ++dm->caret.clientPos.y;
+    } else {
+        Scroll(hwnd, dm, STEP, DOWN, rectangle);
+    }
+}
+
+void HandleRight(HWND hwnd, DisplayedModel* dm, RECT* rectangle) {
+    assert(dm && rectangle);
+
+    ++dm->caret.modelPos.pos.x;
+    if (dm->caret.clientPos.x < dm->clientArea.chars - 1) {
+        ++dm->caret.clientPos.x;
+    } else {
+        Scroll(hwnd, dm, STEP, RIGHT, rectangle);
+    }
+}
+
+void HandleLeft(HWND hwnd, DisplayedModel* dm, RECT* rectangle) {
+    assert(dm && rectangle);
+
+    --dm->caret.modelPos.pos.x;
+
+    if (dm->caret.clientPos.x > 0) {
+        --dm->caret.clientPos.x;
+    } else {
+        Scroll(hwnd, dm, STEP, LEFT, rectangle);
+    }
+}
+
+void CaretScroll_Up(HWND hwnd, DisplayedModel* dm, size_t scrollValue) {
+    assert(dm);
+
+    if (scrollValue) {
+        if (dm->caret.clientPos.y == 0 && dm->caret.isHidden.y) {
+            // caret is above the top
+            if (dm->scrollBars.modelPos.pos.y <= dm->caret.modelPos.pos.y) {
+                printf("Show\n");
+                ShowCaret(hwnd);
+                dm->caret.isHidden.y = 0;
+            }
+        } else if (!dm->caret.isHidden.y) {
+            size_t deltaPos = (dm->clientArea.lines - 1) - dm->caret.clientPos.y;
+            
+            if (deltaPos >= scrollValue) {
+                dm->caret.clientPos.y += scrollValue;
+            } else { // caret is below the bottom
+                printf("Hidden\n");
+                HideCaret(hwnd);
+                dm->caret.isHidden.y = 1;
+
+                dm->caret.clientPos.y = dm->clientArea.lines - 1;
+            }
+        }
+    }
+}
+
+void CaretScroll_Down(HWND hwnd, DisplayedModel* dm, size_t scrollValue) {
+    assert(dm);
+
+    if (scrollValue) {
+        if (dm->caret.clientPos.y == (dm->clientArea.lines - 1) && dm->caret.isHidden.y) {
+            // caret is below the bottom
+            if (dm->scrollBars.modelPos.pos.y + (dm->clientArea.lines - 1) >= dm->caret.modelPos.pos.y) {
+                printf("Show\n");
+                ShowCaret(hwnd);
+                dm->caret.isHidden.y = 0;
+            }
+        } else if (!dm->caret.isHidden.y) {
+            if (dm->caret.clientPos.y >= scrollValue) {
+                dm->caret.clientPos.y -= scrollValue;
+            } else { // caret is above the top
+                printf("Hidden\n");
+                HideCaret(hwnd);
+                dm->caret.isHidden.y = 1;
+
+                dm->caret.clientPos.y = 0;
+            }
+        }
+    }
+}
+
+void SetCaret(DisplayedModel* dm) {
+    assert(dm);
+
+    if (!(dm->caret.isHidden.y | dm->caret.isHidden.x)) {
+        SetCaretPos(dm->caret.clientPos.x * dm->charMetric.x, dm->caret.clientPos.y * dm->charMetric.y);
+    }
 }

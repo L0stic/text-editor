@@ -2,8 +2,8 @@
 #ifndef DISPLAYED_MODEL_H_INCLUDED
 #define DISPLAYED_MODEL_H_INCLUDED
 
-// #define CARET_ON
-#define CARET_OFF
+#define CARET_ON
+// #define CARET_OFF
 
 #include <windows.h>
 #include <assert.h>
@@ -44,11 +44,6 @@ typedef struct {
 } area_t;
 
 typedef struct {
-    size_t lines;
-    size_t chars;
-} DefaultModel;
-
-typedef struct {
     int isValid;
     size_t lines;
 } WrapModel;
@@ -76,7 +71,10 @@ typedef struct {
 
     #ifdef CARET_ON
         struct {
-            int isHidden;
+            struct {
+                int x;
+                int y;
+            } isHidden;
             position_t clientPos;
             ModelPos modelPos;
         } caret;
@@ -91,8 +89,19 @@ void SwitchMode(HWND hwnd, DisplayedModel* dm, FormatMode mode);
 void DisplayModel(HDC hdc, const DisplayedModel* dm);
 
 // Scroll-bar
-int Scroll(HWND hwnd, DisplayedModel* dm, size_t count, Direction dir, RECT* rectangle);
+size_t Scroll(HWND hwnd, DisplayedModel* dm, size_t count, Direction dir, RECT* rectangle);
 
 // Caret
+void FindEnd_Left(HWND hwnd, DisplayedModel* dm, RECT* rectangle);
+void FindEnd_Right(HWND hwnd, DisplayedModel* dm, RECT* rectangle);
+void FindHome(HWND hwnd, DisplayedModel* dm, RECT* rectangle);
 
+void HandleTop(HWND hwnd, DisplayedModel* dm, RECT* rectangle);
+void HandleBottom(HWND hwnd, DisplayedModel* dm, RECT* rectangle);
+void HandleRight(HWND hwnd, DisplayedModel* dm, RECT* rectangle);
+void HandleLeft(HWND hwnd, DisplayedModel* dm, RECT* rectangle);
+
+void CaretScroll_Up(HWND hwnd, DisplayedModel* dm, size_t scrollValue);
+void CaretScroll_Down(HWND hwnd, DisplayedModel* dm, size_t scrollValue);
+void SetCaret(DisplayedModel* dm);
 #endif // DISPLAYED_MODEL_H_INCLUDED
