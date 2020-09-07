@@ -17,6 +17,8 @@
     #include "Caret.h"
 #endif
 
+#define DECREMENT_OF(elem) (elem - 1)
+
 typedef enum {
     FORMAT_MODE_DEFAULT,
     FORMAT_MODE_WRAP
@@ -92,16 +94,26 @@ void DisplayModel(HDC hdc, const DisplayedModel* dm);
 size_t Scroll(HWND hwnd, DisplayedModel* dm, size_t count, Direction dir, RECT* rectangle);
 
 // Caret
-void FindEnd_Left(HWND hwnd, DisplayedModel* dm, RECT* rectangle);
-void FindEnd_Right(HWND hwnd, DisplayedModel* dm, RECT* rectangle);
-void FindHome(HWND hwnd, DisplayedModel* dm, RECT* rectangle);
+#ifdef CARET_ON
+    void FindEnd_Left(HWND hwnd, DisplayedModel* dm, RECT* rectangle);
+    void FindEnd_Right(HWND hwnd, DisplayedModel* dm, RECT* rectangle);
+    void FindHome(HWND hwnd, DisplayedModel* dm, RECT* rectangle);
 
-void HandleTop(HWND hwnd, DisplayedModel* dm, RECT* rectangle);
-void HandleBottom(HWND hwnd, DisplayedModel* dm, RECT* rectangle);
-void HandleRight(HWND hwnd, DisplayedModel* dm, RECT* rectangle);
-void HandleLeft(HWND hwnd, DisplayedModel* dm, RECT* rectangle);
+    void CaretMoveToTop(HWND hwnd, DisplayedModel* dm, RECT* rectangle);
+    void CaretMoveToBottom(HWND hwnd, DisplayedModel* dm, RECT* rectangle);
+    void CaretMoveToRight(HWND hwnd, DisplayedModel* dm, RECT* rectangle);
+    void CaretMoveToLeft(HWND hwnd, DisplayedModel* dm, RECT* rectangle);
 
-void CaretScroll_Up(HWND hwnd, DisplayedModel* dm, size_t scrollValue);
-void CaretScroll_Down(HWND hwnd, DisplayedModel* dm, size_t scrollValue);
-void SetCaret(DisplayedModel* dm);
+    // void FindCaret(DisplayedModel* dm);
+
+    void CaretSetPos(DisplayedModel* dm);
+    void CaretCreate(HWND hwnd, DisplayedModel* dm);
+    void CaretDestroy(HWND hwnd);
+    void CaretShow(HWND hwnd, int* p_isHidden);
+    void CaretHide(HWND hwnd, int* p_isHidden);
+
+    void CaretTopLeftBorder(HWND hwnd, int* p_isHidden, size_t scrollValue, size_t modelPos, size_t scrollBarPos, size_t* pClientPos, size_t clientPosMax);
+    void CaretBottomRightBorder(HWND hwnd, int* p_isHidden, size_t scrollValue, size_t modelPos, size_t scrollBarPos, size_t* pClientPos, size_t clientPosMax);
+#endif
+
 #endif // DISPLAYED_MODEL_H_INCLUDED
