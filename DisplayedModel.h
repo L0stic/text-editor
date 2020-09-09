@@ -95,6 +95,8 @@ size_t Scroll(HWND hwnd, DisplayedModel* dm, size_t count, Direction dir, RECT* 
 
 // Caret
 #ifdef CARET_ON
+    void CaretPrintParams(DisplayedModel* dm);
+
     void FindEnd_Left(HWND hwnd, DisplayedModel* dm, RECT* rectangle);
     void FindEnd_Right(HWND hwnd, DisplayedModel* dm, RECT* rectangle);
     void FindHome(HWND hwnd, DisplayedModel* dm, RECT* rectangle);
@@ -104,7 +106,10 @@ size_t Scroll(HWND hwnd, DisplayedModel* dm, size_t count, Direction dir, RECT* 
     void CaretMoveToRight(HWND hwnd, DisplayedModel* dm, RECT* rectangle);
     void CaretMoveToLeft(HWND hwnd, DisplayedModel* dm, RECT* rectangle);
 
-    // void FindCaret(DisplayedModel* dm);
+    void CaretPageUp(HWND hwnd, DisplayedModel* dm, RECT* rectangle);
+    void CaretPageDown(HWND hwnd, DisplayedModel* dm, RECT* rectangle);
+
+    void FindCaret(HWND hwnd, DisplayedModel* dm, RECT* rectangle);
 
     void CaretSetPos(DisplayedModel* dm);
     void CaretCreate(HWND hwnd, DisplayedModel* dm);
