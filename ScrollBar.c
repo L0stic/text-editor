@@ -75,3 +75,17 @@ size_t GetAbsolutePos(size_t relativePos, size_t absoluteMaxPos) {
 
     return absolutePos;
 }
+
+// for debugging
+void PrintScrollBar(const ScrollBar* pSB) {
+    printf("Absolute: pos = %i of [0; %i]\n", pSB->pos, pSB->maxPos);
+}
+
+void CheckScrollBar(const HWND hwnd, int SB_TYPE) {
+    assert(SB_TYPE == SB_HORZ || SB_TYPE == SB_VERT);
+    int pos, bottom, top;
+
+    pos = GetScrollPos(hwnd, SB_TYPE);
+    GetScrollRange(hwnd, SB_TYPE, &bottom, &top);
+    printf("Relative: pos = %i of [%i; %i]\n", pos, bottom, top);
+}

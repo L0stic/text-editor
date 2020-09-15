@@ -79,6 +79,7 @@ typedef struct {
             } isHidden;
             position_t clientPos;
             ModelPos modelPos;
+            size_t linePos; // for wrap model
         } caret;
     #endif
 } DisplayedModel;
@@ -97,14 +98,29 @@ size_t Scroll(HWND hwnd, DisplayedModel* dm, size_t count, Direction dir, RECT* 
 #ifdef CARET_ON
     void CaretPrintParams(DisplayedModel* dm);
 
-    void FindEnd_Left(HWND hwnd, DisplayedModel* dm, RECT* rectangle);
-    void FindEnd_Right(HWND hwnd, DisplayedModel* dm, RECT* rectangle);
     void FindHome(HWND hwnd, DisplayedModel* dm, RECT* rectangle);
+    void FindHome_Default(HWND hwnd, DisplayedModel* dm, RECT* rectangle);
+    void FindHome_Wrap(DisplayedModel* dm);
 
-    void CaretMoveToTop(HWND hwnd, DisplayedModel* dm, RECT* rectangle);
-    void CaretMoveToBottom(HWND hwnd, DisplayedModel* dm, RECT* rectangle);
-    void CaretMoveToRight(HWND hwnd, DisplayedModel* dm, RECT* rectangle);
-    void CaretMoveToLeft(HWND hwnd, DisplayedModel* dm, RECT* rectangle);
+    // void CaretGoToEnd_Default(HWND hwnd, DisplayedModel* dm, RECT* rectangle);
+    // void CaretGoToEnd_Wrap(HWND hwnd, DisplayedModel* dm, RECT* rectangle);
+
+    void FindLeftEnd_Default(HWND hwnd, DisplayedModel* dm, RECT* rectangle);
+    
+    void FindRightEnd_Default(HWND hwnd, DisplayedModel* dm, RECT* rectangle);
+    void FindRightEnd_Wrap(DisplayedModel* dm);
+
+    void CaretMoveToTop_Default(HWND hwnd, DisplayedModel* dm, RECT* rectangle);
+    void CaretMoveToTop_Wrap(HWND hwnd, DisplayedModel* dm, RECT* rectangle);
+    
+    void CaretMoveToBottom_Default(HWND hwnd, DisplayedModel* dm, RECT* rectangle);
+    void CaretMoveToBottom_Wrap(HWND hwnd, DisplayedModel* dm, RECT* rectangle);
+    
+    void CaretMoveToLeft_Default(HWND hwnd, DisplayedModel* dm, RECT* rectangle);
+    void CaretMoveToLeft_Wrap(DisplayedModel* dm);
+
+    void CaretMoveToRight_Default(HWND hwnd, DisplayedModel* dm, RECT* rectangle);
+    void CaretMoveToRight_Wrap(DisplayedModel* dm);
 
     void CaretPageUp(HWND hwnd, DisplayedModel* dm, RECT* rectangle);
     void CaretPageDown(HWND hwnd, DisplayedModel* dm, RECT* rectangle);

@@ -23,4 +23,8 @@ size_t GetAbsolutePos(size_t relativePos, size_t absoluteMaxPos);
 void SetRelativePos(HWND hwnd, ScrollBar* pSB, int SB_TYPE);
 void SetRelativeParam(HWND hwnd, ScrollBar* pSB, int SB_TYPE);
 
+// for debugging
+void PrintScrollBar(const ScrollBar* pSB);
+void CheckScrollBar(const HWND hwnd, int SB_TYPE);
+
 #endif // SCROLL_BAR_H_INCLUDED

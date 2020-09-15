@@ -248,9 +248,7 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
         UpdateDisplayedModel(hwnd, &dm, lParam);
         
         #ifdef CARET_ON
-            if(hwnd == GetFocus()) {
-                CaretSetPos(&dm);
-            }
+            if(hwnd == GetFocus()) { CaretSetPos(&dm); }
         #endif
         break;
     // WM_SIZE
@@ -425,13 +423,27 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
         switch (wParam) {
         case VK_UP:
             #ifdef CARET_ON
-                if (dm.mode == FORMAT_MODE_WRAP) { break; }
-
                 FindCaret(hwnd, &dm, &rectangle);
 
-                if (dm.caret.modelPos.pos.y > 0) {
-                    CaretMoveToTop(hwnd, &dm, &rectangle);
-                    FindEnd_Left(hwnd, &dm, &rectangle);
+                switch (dm.mode) {
+                case FORMAT_MODE_DEFAULT:
+                    if (dm.caret.modelPos.pos.y > 0) {
+                        CaretMoveToTop_Default(hwnd, &dm, &rectangle);
+
+                        if (dm.caret.modelPos.pos.x > dm.caret.modelPos.block->data.len) {
+                            FindLeftEnd_Default(hwnd, &dm, &rectangle);
+                        }
+                    }
+                    break;
+                    
+                case FORMAT_MODE_WRAP:
+                    if (dm.caret.linePos > 0) {
+                        CaretMoveToTop_Wrap(hwnd, &dm, &rectangle);
+                    }
+                    break;
+
+                default:
+                    break;
                 }
             #else
                 PostMessage(hwnd, WM_VSCROLL, SB_LINEUP, (LPARAM)0);
@@ -440,13 +452,27 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
 
         case VK_DOWN:
             #ifdef CARET_ON
-                if (dm.mode == FORMAT_MODE_WRAP) { break; }
-
                 FindCaret(hwnd, &dm, &rectangle);
 
-                if (dm.caret.modelPos.pos.y < dm.documentArea.lines - 1) {
-                    CaretMoveToBottom(hwnd, &dm, &rectangle);
-                    FindEnd_Left(hwnd, &dm, &rectangle);
+                switch (dm.mode) {
+                case FORMAT_MODE_DEFAULT:
+                    if (dm.caret.modelPos.pos.y < DECREMENT_OF(dm.documentArea.lines)) {
+                        CaretMoveToBottom_Default(hwnd, &dm, &rectangle);
+
+                        if (dm.caret.modelPos.pos.x > dm.caret.modelPos.block->data.len) {
+                            FindLeftEnd_Default(hwnd, &dm, &rectangle);
+                        }
+                    }
+                    break;
+                    
+                case FORMAT_MODE_WRAP:
+                    if (dm.caret.linePos < DECREMENT_OF(dm.wrapModel.lines)) {
+                        CaretMoveToBottom_Wrap(hwnd, &dm, &rectangle);
+                    }
+                    break;
+
+                default:
+                    break;
                 }
             #else
                 PostMessage(hwnd, WM_VSCROLL, SB_LINEDOWN, (LPARAM)0);
@@ -455,15 +481,29 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
 
         case VK_LEFT:
             #ifdef CARET_ON
-                if (dm.mode == FORMAT_MODE_WRAP) { break; }
-
                 FindCaret(hwnd, &dm, &rectangle);
 
-                if (dm.caret.modelPos.pos.x > 0) {
-                    CaretMoveToLeft(hwnd, &dm, &rectangle);
-                } else if (dm.caret.modelPos.pos.y > 0) {    
-                    CaretMoveToTop(hwnd, &dm, &rectangle);
-                    PostMessage(hwnd, WM_KEYDOWN, VK_END, (LPARAM)0);
+                switch (dm.mode) {
+                case FORMAT_MODE_DEFAULT:
+                    if (dm.caret.modelPos.pos.x > 0) {
+                        CaretMoveToLeft_Default(hwnd, &dm, &rectangle);
+                    } else if (dm.caret.modelPos.pos.y > 0) {    
+                        CaretMoveToTop_Default(hwnd, &dm, &rectangle);
+                        FindRightEnd_Default(hwnd, &dm, &rectangle);
+                    }
+                    break;
+                    
+                case FORMAT_MODE_WRAP:
+                    if (dm.caret.clientPos.x > 0) {
+                        CaretMoveToLeft_Wrap(&dm);
+                    } else if (dm.caret.linePos > 0) {    
+                        CaretMoveToTop_Wrap(hwnd, &dm, &rectangle);
+                        FindRightEnd_Wrap(&dm);
+                    }
+                    break;
+
+                default:
+                    break;
                 }
             #else
                 PostMessage(hwnd, WM_HSCROLL, SB_LINEUP, (LPARAM)0);
@@ -472,15 +512,30 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
 
         case VK_RIGHT:
             #ifdef CARET_ON
-                if (dm.mode == FORMAT_MODE_WRAP) { break; }
-
                 FindCaret(hwnd, &dm, &rectangle);
 
-                if (dm.caret.modelPos.pos.x < dm.caret.modelPos.block->data.len) {
-                    CaretMoveToRight(hwnd, &dm, &rectangle);
-                } else if (dm.caret.modelPos.pos.y < (dm.documentArea.lines - 1)) {                    
-                    CaretMoveToBottom(hwnd, &dm, &rectangle);
-                    PostMessage(hwnd, WM_KEYDOWN, VK_HOME, (LPARAM)0);
+                switch (dm.mode) {
+                case FORMAT_MODE_DEFAULT:
+                    if (dm.caret.modelPos.pos.x < dm.caret.modelPos.block->data.len) {
+                        CaretMoveToRight_Default(hwnd, &dm, &rectangle);
+                    } else if (dm.caret.modelPos.pos.y < DECREMENT_OF(dm.documentArea.lines)) {                    
+                        CaretMoveToBottom_Default(hwnd, &dm, &rectangle);
+                        FindHome_Default(hwnd, &dm, &rectangle);
+                    }
+                    break;
+                    
+                case FORMAT_MODE_WRAP:
+                    if (dm.caret.modelPos.pos.x < dm.caret.modelPos.block->data.len
+                        && dm.caret.clientPos.x < dm.clientArea.chars) {
+                        CaretMoveToRight_Wrap(&dm);
+                    } else if (dm.caret.linePos < DECREMENT_OF(dm.wrapModel.lines)) {                    
+                        CaretMoveToBottom_Wrap(hwnd, &dm, &rectangle);
+                        FindHome_Wrap(&dm);
+                    }
+                    break;
+
+                default:
+                    break;
                 }
             #else
                 PostMessage(hwnd, WM_HSCROLL, SB_LINEDOWN, (LPARAM)0);
@@ -493,12 +548,8 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
                 if (dm.mode == FORMAT_MODE_WRAP) { break; }
 
                 FindCaret(hwnd, &dm, &rectangle);
-                CaretPrintParams(&dm);
-
                 CaretPageUp(hwnd, &dm, &rectangle);
-                
-                CaretPrintParams(&dm);
-                FindEnd_Left(hwnd, &dm, &rectangle);
+                FindLeftEnd_Default(hwnd, &dm, &rectangle);
             #else
                 PostMessage(hwnd, WM_VSCROLL, SB_PAGEUP, (LPARAM)0);
             #endif
@@ -509,12 +560,8 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
                 if (dm.mode == FORMAT_MODE_WRAP) { break; }
 
                 FindCaret(hwnd, &dm, &rectangle);
-                CaretPrintParams(&dm);
-
                 CaretPageDown(hwnd, &dm, &rectangle);
-
-                CaretPrintParams(&dm);
-                FindEnd_Left(hwnd, &dm, &rectangle);
+                FindLeftEnd_Default(hwnd, &dm, &rectangle);
             #else
                 PostMessage(hwnd, WM_VSCROLL, SB_PAGEDOWN, (LPARAM)0);
             #endif
@@ -522,11 +569,23 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
 
         case VK_HOME:
             #ifdef CARET_ON
-                if (dm.mode == FORMAT_MODE_WRAP) { break; }
-                
                 FindCaret(hwnd, &dm, &rectangle);
 
-                FindHome(hwnd, &dm, &rectangle);
+                switch (dm.mode) {
+                case FORMAT_MODE_DEFAULT:
+                    if (dm.caret.modelPos.pos.x) {
+                        FindHome_Default(hwnd, &dm, &rectangle);
+                    }
+                    break;
+                    
+                case FORMAT_MODE_WRAP:
+                    if (dm.caret.clientPos.x) {
+                        FindHome_Wrap(&dm);
+                    }
+                    break;
+                default:
+                    break;
+                }
             #else
                 PostMessage(hwnd, WM_HSCROLL, SB_PAGEUP, (LPARAM)0);
             #endif
@@ -534,10 +593,20 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
 
         case VK_END:
             #ifdef CARET_ON
-                if (dm.mode == FORMAT_MODE_WRAP) { break; }
-                
                 FindCaret(hwnd, &dm, &rectangle);
-                FindEnd_Right(hwnd, &dm, &rectangle);
+
+                switch (dm.mode) {
+                case FORMAT_MODE_DEFAULT:
+                    FindRightEnd_Default(hwnd, &dm, &rectangle);
+                    break;
+                    
+                case FORMAT_MODE_WRAP:
+                    FindRightEnd_Wrap(&dm);
+                    break;
+
+                default:
+                    break;
+                }
             #else
                 PostMessage(hwnd, WM_HSCROLL, SB_PAGEDOWN, (LPARAM)0);
             #endif
@@ -548,6 +617,7 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
         }
 
         #ifdef CARET_ON
+            CaretPrintParams(&dm);
             CaretSetPos(&dm);
         #endif
         break;
