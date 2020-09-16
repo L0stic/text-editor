@@ -133,7 +133,8 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
     RECT        rectangle;
 
     #ifdef CARET_ON
-        size_t scrollValue;
+        size_t scrollValue = 0;
+        size_t numLines = 0;
     #endif
 
     /* handle the messages */
@@ -350,12 +351,27 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
     // WM_HSCROLL
 
     case WM_VSCROLL:
+        #ifdef CARET_ON
+            switch (dm.mode) {
+            case FORMAT_MODE_DEFAULT:
+                numLines = dm.caret.modelPos.pos.y;
+                break;
+
+            case FORMAT_MODE_WRAP:
+                numLines = dm.caret.linePos;
+                break;
+                
+            default:
+                break;
+            }
+        #endif
+
         switch (LOWORD(wParam)) {
         case SB_LINEUP:
             #ifdef CARET_ON
                 scrollValue = Scroll(hwnd, &dm, 1, UP, &rectangle);
                 CaretTopLeftBorder(hwnd, &(dm.caret.isHidden.y), scrollValue,
-                                        dm.caret.modelPos.pos.y, dm.scrollBars.vertical.pos,
+                                        numLines, dm.scrollBars.vertical.pos,
                                         &(dm.caret.clientPos.y), DECREMENT_OF(dm.clientArea.lines));
             #else
                 Scroll(hwnd, &dm, 1, UP, &rectangle);
@@ -366,7 +382,7 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
             #ifdef CARET_ON
                 scrollValue = Scroll(hwnd, &dm, 1, DOWN, &rectangle);
                 CaretBottomRightBorder(hwnd, &(dm.caret.isHidden.y), scrollValue,
-                                        dm.caret.modelPos.pos.y, dm.scrollBars.vertical.pos,
+                                        numLines, dm.scrollBars.vertical.pos,
                                         &(dm.caret.clientPos.y), DECREMENT_OF(dm.clientArea.lines));
             #else
                 Scroll(hwnd, &dm, 1, DOWN, &rectangle);
@@ -392,17 +408,18 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
                 #ifdef CARET_ON
                     scrollValue = Scroll(hwnd, &dm, dm.scrollBars.vertical.pos - absolutePos, UP, &rectangle);
                     CaretTopLeftBorder(hwnd, &(dm.caret.isHidden.y), scrollValue,
-                                        dm.caret.modelPos.pos.y, dm.scrollBars.vertical.pos,
+                                        numLines, dm.scrollBars.vertical.pos,
                                         &(dm.caret.clientPos.y), DECREMENT_OF(dm.clientArea.lines));
                 #else
                     Scroll(hwnd, &dm, dm.scrollBars.vertical.pos - absolutePos, UP, &rectangle);
                 #endif
+
             } else if (dm.scrollBars.vertical.pos < absolutePos) {
                 #ifdef CARET_ON
                     scrollValue = Scroll(hwnd, &dm, absolutePos - dm.scrollBars.vertical.pos, DOWN, &rectangle);
                     CaretBottomRightBorder(hwnd, &(dm.caret.isHidden.y), scrollValue,
-                                        dm.caret.modelPos.pos.y, dm.scrollBars.vertical.pos,
-                                        &(dm.caret.clientPos.y), DECREMENT_OF(dm.clientArea.lines));;
+                                            numLines, dm.scrollBars.vertical.pos,
+                                            &(dm.caret.clientPos.y), DECREMENT_OF(dm.clientArea.lines));
                 #else
                     Scroll(hwnd, &dm, absolutePos - dm.scrollBars.vertical.pos, DOWN, &rectangle);
                 #endif

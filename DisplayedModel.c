@@ -1,6 +1,7 @@
 #include "DisplayedModel.h"
 
 // don't touch this parameter
+// DISPLAY_STEP
 #define STEP 1
 
 static void InitModelPos(ModelPos* pMP, Block* block) {
@@ -43,6 +44,7 @@ void InitDisplayedModel(DisplayedModel* dm, TEXTMETRIC* tm) {
     #endif
 }
 
+
 static void PassPrev(ModelPos* modelPos, size_t delta) {
     assert(modelPos);
 
@@ -63,11 +65,25 @@ static void PassNext(ModelPos* modelPos, size_t delta) {
     }
 }
 
+
 static void PrintWrapModel(WrapModel* wrapModel) {
     if (wrapModel->isValid) {
         printf("Wrap model: %u\n", wrapModel->lines);
     } else {
         printf("Wrap model is not valid\n");
+    }
+}
+
+static void CountLines(Block* startBlock, const Block* lastBlock, DisplayedModel* dm) {
+    assert(startBlock && dm);
+
+    while (startBlock != lastBlock) {
+        if (startBlock->data.len > 0) {
+            dm->wrapModel.lines += DIV_WITH_ROUND_UP(startBlock->data.len, dm->clientArea.chars);
+        } else {
+            ++dm->wrapModel.lines;
+        }
+        startBlock = startBlock->next;
     }
 }
 
@@ -80,18 +96,13 @@ static size_t BuildWrapModel(HWND hwnd, DisplayedModel* dm) {
 
     dm->scrollBars.modelPos.pos.x = 0;
     dm->wrapModel.lines = 0;
-    dm->caret.linePos = 0;
 
     #ifdef CARET_ON
+        dm->caret.linePos = 0;
+
         if (dm->caret.modelPos.pos.y < dm->scrollBars.modelPos.pos.y) {
-            while (block != dm->caret.modelPos.block) {
-                if (block->data.len > 0) {
-                    dm->wrapModel.lines += DIV_WITH_ROUND_UP(block->data.len, dm->clientArea.chars);
-                } else {
-                    ++dm->wrapModel.lines;
-                }
-                block = block->next;
-            }
+            CountLines(block, dm->caret.modelPos.block, dm);
+            block = dm->caret.modelPos.block;
 
             dm->caret.linePos = dm->wrapModel.lines;
             dm->caret.linePos += dm->caret.modelPos.pos.x / dm->clientArea.chars;
@@ -101,27 +112,15 @@ static size_t BuildWrapModel(HWND hwnd, DisplayedModel* dm) {
         }
     #endif
 
-    while (block != dm->scrollBars.modelPos.block) {
-        if (block->data.len > 0) {
-            dm->wrapModel.lines += DIV_WITH_ROUND_UP(block->data.len, dm->clientArea.chars);
-        } else {
-            ++dm->wrapModel.lines;
-        }
-        block = block->next;
-    }
+    CountLines(block, dm->scrollBars.modelPos.block, dm);
+    block = dm->scrollBars.modelPos.block;
 
     absolutePos = dm->wrapModel.lines;
 
     #ifdef CARET_ON
         if (dm->caret.modelPos.pos.y >= dm->scrollBars.modelPos.pos.y) {
-            while (block != dm->caret.modelPos.block) {
-                if (block->data.len > 0) {
-                    dm->wrapModel.lines += DIV_WITH_ROUND_UP(block->data.len, dm->clientArea.chars);
-                } else {
-                    ++dm->wrapModel.lines;
-                }
-                block = block->next;
-            }
+            CountLines(block, dm->caret.modelPos.block, dm);
+            block = dm->caret.modelPos.block;
 
             dm->caret.linePos = dm->wrapModel.lines;
             dm->caret.linePos += dm->caret.modelPos.pos.x / dm->clientArea.chars;
@@ -137,55 +136,11 @@ static size_t BuildWrapModel(HWND hwnd, DisplayedModel* dm) {
         }
     #endif
 
-    while (block) {
-        if (block->data.len > 0) {
-            dm->wrapModel.lines += DIV_WITH_ROUND_UP(block->data.len, dm->clientArea.chars);
-        } else {
-            ++dm->wrapModel.lines;
-        }
-        block = block->next;
-    }
+    CountLines(block, NULL, dm);
+    block = NULL;
 
     dm->wrapModel.isValid = 1;
     return absolutePos;
-}
-
-static void UpdateVerticalSB_Default(DisplayedModel* dm) {
-    assert(dm);
-    dm->scrollBars.vertical.maxPos = GetAbsoluteMaxPos(dm->documentArea.lines, dm->clientArea.lines);
-
-    if (dm->scrollBars.vertical.pos > dm->scrollBars.vertical.maxPos) {
-        // pass
-        PassPrev(&(dm->scrollBars.modelPos), dm->scrollBars.vertical.pos - dm->scrollBars.vertical.maxPos);
-        dm->scrollBars.vertical.pos = dm->scrollBars.vertical.maxPos;
-    }
-}
-
-static void UpdateVerticalSB_Wrap(DisplayedModel* dm) {
-    assert(dm);
-    dm->scrollBars.vertical.maxPos = GetAbsoluteMaxPos(dm->wrapModel.lines, dm->clientArea.lines);
-
-    if (dm->scrollBars.vertical.pos > dm->scrollBars.vertical.maxPos) {
-        // pass
-        for (size_t delta = dm->scrollBars.vertical.pos - dm->scrollBars.vertical.maxPos; delta > 0;) {
-            if (dm->scrollBars.modelPos.pos.x + 1 <= delta) {
-                delta -= dm->scrollBars.modelPos.pos.x + 1;
-            } else {
-                dm->scrollBars.modelPos.pos.x -= delta;
-                break;
-            }
-
-            // prev block
-            dm->scrollBars.modelPos.block = dm->scrollBars.modelPos.block->prev;
-            --dm->scrollBars.modelPos.pos.y;
-            if (dm->scrollBars.modelPos.block->data.len > 0) {
-                dm->scrollBars.modelPos.pos.x = DIV_WITH_ROUND_UP(dm->scrollBars.modelPos.block->data.len, dm->clientArea.chars) - 1;
-            } else {
-                dm->scrollBars.modelPos.pos.x = 0;
-            }
-        }
-        dm->scrollBars.vertical.pos = dm->scrollBars.vertical.maxPos;
-    }
 }
 
 void CoverDocument(HWND hwnd, DisplayedModel* dm, Document* doc) {
@@ -217,10 +172,12 @@ void CoverDocument(HWND hwnd, DisplayedModel* dm, Document* doc) {
         break;
 
     case FORMAT_MODE_WRAP:
-        PrintWrapModel(&(dm->wrapModel));
-
         BuildWrapModel(hwnd, dm);
-        PrintWrapModel(&(dm->wrapModel));
+
+        #ifndef DEBUG // ================================/
+            // PrintWrapModel(&(dm->wrapModel));
+        #endif // =======================================/
+
         dm->scrollBars.vertical.maxPos = GetAbsoluteMaxPos(dm->wrapModel.lines, dm->clientArea.lines);
         break;
 
@@ -334,6 +291,7 @@ void DisplayModel(HDC hdc, const DisplayedModel* dm) {
         return;
     }
 }
+
 
 static void UpdateScrollPos_Back(DisplayedModel* dm, size_t count) {
     assert(dm);
@@ -570,40 +528,6 @@ size_t Scroll(HWND hwnd, DisplayedModel* dm, size_t count, Direction direction, 
         dm->caret.clientPos.x = 0;
     }
 
-    /*
-    void CaretGoToEnd_Default(HWND hwnd, DisplayedModel* dm, RECT* rectangle) {
-        assert(dm && rectangle);
-        size_t deltaModel, deltaClient;
-
-        if (dm->caret.modelPos.pos.x > dm->caret.modelPos.block->data.len) {
-            // left
-            deltaModel = dm->caret.modelPos.pos.x - dm->caret.modelPos.block->data.len;
-
-            if (dm->caret.clientPos.x < deltaModel) {
-                Scroll(hwnd, dm, deltaModel - dm->caret.clientPos.x, LEFT, rectangle);
-                dm->caret.clientPos.x = 0;
-            } else {
-                dm->caret.clientPos.x -= deltaModel;
-            }
-        } else if (dm->caret.modelPos.pos.x < dm->caret.modelPos.block->data.len) {
-            // right
-            deltaModel = dm->caret.modelPos.block->data.len - dm->caret.modelPos.pos.x;
-            deltaClient = DECREMENT_OF(dm->clientArea.chars) - dm->caret.clientPos.x;
-
-            if (deltaModel > deltaClient) {
-                Scroll(hwnd, dm, deltaModel - deltaClient, RIGHT, rectangle);
-                dm->caret.clientPos.x = DECREMENT_OF(dm->clientArea.chars);
-            } else {
-                dm->caret.clientPos.x += deltaModel;
-            }
-        } else {
-            return;
-        }
-
-        dm->caret.modelPos.pos.x = dm->caret.modelPos.block->data.len;
-    }
-    */
-
     void FindLeftEnd_Default(HWND hwnd, DisplayedModel* dm, RECT* rectangle) {
         assert(dm && rectangle);
         assert(dm->caret.modelPos.pos.x > dm->caret.modelPos.block->data.len);
@@ -651,6 +575,7 @@ size_t Scroll(HWND hwnd, DisplayedModel* dm, size_t count, Direction direction, 
             dm->caret.modelPos.pos.x = dm->caret.modelPos.block->data.len;
         }
     }
+
 
     // CaretMoveToTop
     static void MoveToTop(HWND hwnd, DisplayedModel* dm, RECT* rectangle) {
@@ -808,9 +733,6 @@ size_t Scroll(HWND hwnd, DisplayedModel* dm, size_t count, Direction direction, 
         ++dm->caret.clientPos.x;
     }
 
-
-
-
     void CaretPageUp(HWND hwnd, DisplayedModel* dm, RECT* rectangle) {
         assert(dm && rectangle);
 
@@ -826,7 +748,8 @@ size_t Scroll(HWND hwnd, DisplayedModel* dm, size_t count, Direction direction, 
     void CaretPageDown(HWND hwnd, DisplayedModel* dm, RECT* rectangle) {
         assert(dm && rectangle);
 
-        size_t delta = min(DECREMENT_OF(dm->clientArea.lines - 1), dm->scrollBars.vertical.maxPos - dm->scrollBars.vertical.pos);
+        size_t delta = min(DECREMENT_OF(dm->clientArea.lines - 1),
+                            dm->scrollBars.vertical.maxPos - dm->scrollBars.vertical.pos);
         printf("%u\n", delta);
 
         if (dm->caret.modelPos.pos.y - dm->caret.clientPos.y + delta <= dm->scrollBars.vertical.maxPos) {
@@ -849,27 +772,6 @@ size_t Scroll(HWND hwnd, DisplayedModel* dm, size_t count, Direction direction, 
         CreateCaret(hwnd, NULL, dm->charMetric.x, dm->charMetric.y);
         CaretSetPos(dm);
         ShowCaret(hwnd);
-    }
-
-    void CaretDestroy(HWND hwnd) {
-        HideCaret(hwnd);
-        DestroyCaret();
-    }
-
-    void CaretShow(HWND hwnd, int* p_isHidden) {
-        assert(p_isHidden);
-
-        printf("Show\n");
-        ShowCaret(hwnd);
-        *p_isHidden = 0;
-    }
-
-    void CaretHide(HWND hwnd, int* p_isHidden) {
-        assert(p_isHidden);
-
-        printf("Hide\n");
-        HideCaret(hwnd);
-        *p_isHidden = 1;
     }
 
     void CaretTopLeftBorder(HWND hwnd, int* p_isHidden, size_t scrollValue, size_t modelPos, size_t scrollBarPos, size_t* pClientPos, size_t clientPosMax) {
@@ -949,42 +851,37 @@ size_t Scroll(HWND hwnd, DisplayedModel* dm, size_t count, Direction direction, 
             }
         }
 
-        if (dm->caret.isHidden.y && dm->mode == FORMAT_MODE_WRAP) {
-            // top
-            if (dm->caret.linePos < dm->scrollBars.vertical.pos) {
-                scrollValue = dm->scrollBars.vertical.pos - dm->caret.linePos;
-                scrollValue = Scroll(hwnd, dm, scrollValue, UP, rectangle);
-                CaretTopLeftBorder(hwnd, &(dm->caret.isHidden.y), scrollValue,
-                                            dm->caret.linePos, dm->scrollBars.vertical.pos,
-                                            &(dm->caret.clientPos.y), DECREMENT_OF(dm->clientArea.lines - 1));
-            }
-
-            // bottom
-            if (dm->caret.linePos > dm->scrollBars.vertical.pos + DECREMENT_OF(dm->clientArea.lines - 1)) {
-                scrollValue = dm->caret.linePos - (dm->scrollBars.vertical.pos + DECREMENT_OF(dm->clientArea.lines - 1));
-                scrollValue = Scroll(hwnd, dm, scrollValue, DOWN, rectangle);
-                CaretBottomRightBorder(hwnd, &(dm->caret.isHidden.y), scrollValue,
-                                            dm->caret.linePos, dm->scrollBars.vertical.pos,
-                                            &(dm->caret.clientPos.y), DECREMENT_OF(dm->clientArea.lines - 1));
-            }
-        }
-
         if (dm->caret.isHidden.y) {
+            size_t numLines;
+
+            switch (dm->mode) {
+            case FORMAT_MODE_DEFAULT:
+                numLines = dm->caret.modelPos.pos.y;
+                break;
+
+            case FORMAT_MODE_WRAP:
+                numLines = dm->caret.linePos;
+                break;
+                
+            default:
+                break;
+            }
+
             // top
-            if (dm->caret.modelPos.pos.y < dm->scrollBars.vertical.pos) {
-                scrollValue = dm->scrollBars.vertical.pos - dm->caret.modelPos.pos.y;
+            if (numLines < dm->scrollBars.vertical.pos) {
+                scrollValue = dm->scrollBars.vertical.pos - numLines;
                 scrollValue = Scroll(hwnd, dm, scrollValue, UP, rectangle);
                 CaretTopLeftBorder(hwnd, &(dm->caret.isHidden.y), scrollValue,
-                                            dm->caret.modelPos.pos.y, dm->scrollBars.vertical.pos,
+                                            numLines, dm->scrollBars.vertical.pos,
                                             &(dm->caret.clientPos.y), DECREMENT_OF(dm->clientArea.lines - 1));
             }
 
             // bottom
-            if (dm->caret.modelPos.pos.y > dm->scrollBars.vertical.pos + DECREMENT_OF(dm->clientArea.lines - 1)) {
-                scrollValue = dm->caret.modelPos.pos.y - (dm->scrollBars.vertical.pos + DECREMENT_OF(dm->clientArea.lines - 1));
+            if (numLines > dm->scrollBars.vertical.pos + DECREMENT_OF(dm->clientArea.lines - 1)) {
+                scrollValue = numLines - (dm->scrollBars.vertical.pos + DECREMENT_OF(dm->clientArea.lines - 1));
                 scrollValue = Scroll(hwnd, dm, scrollValue, DOWN, rectangle);
                 CaretBottomRightBorder(hwnd, &(dm->caret.isHidden.y), scrollValue,
-                                            dm->caret.modelPos.pos.y, dm->scrollBars.vertical.pos,
+                                            numLines, dm->scrollBars.vertical.pos,
                                             &(dm->caret.clientPos.y), DECREMENT_OF(dm->clientArea.lines - 1));
             }
         }
@@ -996,6 +893,100 @@ size_t Scroll(HWND hwnd, DisplayedModel* dm, size_t count, Direction direction, 
     }
 
 #endif
+
+static void UpdateHorizontalSB_Default(HWND hwnd, DisplayedModel* dm) {
+    assert(dm);
+
+    dm->scrollBars.horizontal.maxPos = GetAbsoluteMaxPos(dm->documentArea.chars, dm->clientArea.chars);
+
+    if (dm->scrollBars.horizontal.pos > dm->scrollBars.horizontal.maxPos) {
+        #ifdef CARET_ON
+            size_t scrollValue = dm->scrollBars.horizontal.pos - dm->scrollBars.horizontal.maxPos;
+        #endif
+
+        dm->scrollBars.horizontal.pos = dm->scrollBars.horizontal.maxPos;
+
+    #ifdef CARET_ON
+            // left border
+            CaretTopLeftBorder(hwnd, &(dm->caret.isHidden.x), scrollValue,
+                                dm->caret.modelPos.pos.x, dm->scrollBars.horizontal.pos,
+                                &(dm->caret.clientPos.x), DECREMENT_OF(dm->clientArea.chars));
+        } else {
+            // right border
+            CaretBottomRightBorder(hwnd, &(dm->caret.isHidden.x), 0,
+                                dm->caret.modelPos.pos.x, dm->scrollBars.horizontal.pos,
+                                &(dm->caret.clientPos.x), DECREMENT_OF(dm->clientArea.chars));
+    #endif
+    }
+}
+
+static void UpdateVerticalSB_Default(HWND hwnd, DisplayedModel* dm) {
+    assert(dm);
+
+    dm->scrollBars.vertical.maxPos = GetAbsoluteMaxPos(dm->documentArea.lines, dm->clientArea.lines);
+
+    if (dm->scrollBars.vertical.pos > dm->scrollBars.vertical.maxPos) {
+        size_t scrollValue = dm->scrollBars.vertical.pos - dm->scrollBars.vertical.maxPos;
+
+        // pass
+        PassPrev(&(dm->scrollBars.modelPos), scrollValue);
+        dm->scrollBars.vertical.pos = dm->scrollBars.vertical.maxPos;
+
+    #ifdef CARET_ON
+            // top
+            CaretTopLeftBorder(hwnd, &(dm->caret.isHidden.y), scrollValue,
+                                dm->caret.modelPos.pos.y, dm->scrollBars.vertical.pos,
+                                &(dm->caret.clientPos.y), DECREMENT_OF(dm->clientArea.lines));
+        } else {
+            // bottom
+            CaretBottomRightBorder(hwnd, &(dm->caret.isHidden.y), 0,
+                                dm->caret.modelPos.pos.y, dm->scrollBars.vertical.pos,
+                                &(dm->caret.clientPos.y), DECREMENT_OF(dm->clientArea.lines));
+    #endif
+    }
+}
+
+static void UpdateVerticalSB_Wrap(HWND hwnd, DisplayedModel* dm) {
+    assert(dm);
+
+    dm->scrollBars.vertical.maxPos = GetAbsoluteMaxPos(dm->wrapModel.lines, dm->clientArea.lines);
+
+    if (dm->scrollBars.vertical.pos > dm->scrollBars.vertical.maxPos) {
+        size_t scrollValue = dm->scrollBars.vertical.pos - dm->scrollBars.vertical.maxPos;
+
+        // pass
+        for (size_t delta = dm->scrollBars.vertical.pos - dm->scrollBars.vertical.maxPos; delta > 0;) {
+            if (dm->scrollBars.modelPos.pos.x + 1 <= delta) {
+                delta -= dm->scrollBars.modelPos.pos.x + 1;
+            } else {
+                dm->scrollBars.modelPos.pos.x -= delta;
+                break;
+            }
+
+            // prev block
+            dm->scrollBars.modelPos.block = dm->scrollBars.modelPos.block->prev;
+            --dm->scrollBars.modelPos.pos.y;
+            if (dm->scrollBars.modelPos.block->data.len > 0) {
+                dm->scrollBars.modelPos.pos.x = DIV_WITH_ROUND_UP(dm->scrollBars.modelPos.block->data.len, dm->clientArea.chars) - 1;
+            } else {
+                dm->scrollBars.modelPos.pos.x = 0;
+            }
+        }
+        dm->scrollBars.vertical.pos = dm->scrollBars.vertical.maxPos;
+
+    #ifdef CARET_ON
+            // top
+            CaretTopLeftBorder(hwnd, &(dm->caret.isHidden.y), scrollValue,
+                                dm->caret.linePos, dm->scrollBars.vertical.pos,
+                                &(dm->caret.clientPos.y), DECREMENT_OF(dm->clientArea.lines));
+        } else {
+            // bottom
+            CaretBottomRightBorder(hwnd, &(dm->caret.isHidden.y), 0,
+                                dm->caret.linePos, dm->scrollBars.vertical.pos,
+                                &(dm->caret.clientPos.y), DECREMENT_OF(dm->clientArea.lines));
+    #endif
+    }
+}
 
 void SwitchMode(HWND hwnd, DisplayedModel* dm, FormatMode mode) {
     printf("Switch mode\n");
@@ -1075,7 +1066,7 @@ void SwitchMode(HWND hwnd, DisplayedModel* dm, FormatMode mode) {
 
         // horizontal scroll-bar
         dm->scrollBars.horizontal.pos = 0;
-        dm->scrollBars.horizontal.maxPos = GetAbsoluteMaxPos(0, dm->clientArea.chars);
+        dm->scrollBars.horizontal.maxPos = 0;
         #ifdef CARET_ON
             dm->caret.clientPos.x = dm->caret.modelPos.pos.x % dm->clientArea.chars;
             if (dm->caret.isHidden.x) { CaretShow(hwnd, &(dm->caret.isHidden.x)); }
@@ -1084,34 +1075,7 @@ void SwitchMode(HWND hwnd, DisplayedModel* dm, FormatMode mode) {
 
         // vertical scroll-bar
         dm->scrollBars.vertical.pos = BuildWrapModel(hwnd, dm);
-
-        // UpdateVerticalSB_Wrap(dm);
-
-        dm->scrollBars.vertical.maxPos = GetAbsoluteMaxPos(dm->wrapModel.lines, dm->clientArea.lines);
-
-        if (dm->scrollBars.vertical.pos > dm->scrollBars.vertical.maxPos) {
-            printf("Unexpected situation\n");
-
-            // // pass
-            // for (size_t delta = dm->scrollBars.vertical.pos - dm->scrollBars.vertical.maxPos; delta > 0;) {
-            //     if (dm->scrollBars.modelPos.pos.x + 1 <= delta) {
-            //         delta -= dm->scrollBars.modelPos.pos.x + 1;
-            //     } else {
-            //         dm->scrollBars.modelPos.pos.x -= delta;
-            //         break;
-            //     }
-
-            //     // prev block
-            //     dm->scrollBars.modelPos.block = dm->scrollBars.modelPos.block->prev;
-            //     --dm->scrollBars.modelPos.pos.y;
-            //     if (dm->scrollBars.modelPos.block->data.len > 0) {
-            //         dm->scrollBars.modelPos.pos.x = DIV_WITH_ROUND_UP(dm->scrollBars.modelPos.block->data.len, dm->clientArea.chars) - 1;
-            //     } else {
-            //         dm->scrollBars.modelPos.pos.x = 0;
-            //     }
-            // }
-            // dm->scrollBars.vertical.pos = dm->scrollBars.vertical.maxPos;
-        }
+        UpdateVerticalSB_Wrap(hwnd, dm);
         break;
 
     default:
@@ -1127,118 +1091,55 @@ void SwitchMode(HWND hwnd, DisplayedModel* dm, FormatMode mode) {
     #endif // ===========/
 }
 
+static int UpdateParameter(size_t* pOldValue, size_t newValue) {
+    assert(pOldValue);
+
+    if (*pOldValue != newValue) {
+        *pOldValue = newValue;
+        return 1;
+    }
+
+    return 0;
+}
+
 void UpdateDisplayedModel(HWND hwnd, DisplayedModel* dm, LPARAM lParam) {
     // printf("UpdateDisplayedModel\n");
     assert(dm);
 
-    int isCharsChanged = 0;
-    int isLinesChanged = 0;
-
-    size_t chars;
+    size_t chars = DIV_WITH_ROUND_UP(LOWORD(lParam), dm->charMetric.x) - (dm->mode == FORMAT_MODE_WRAP);
     size_t lines = DIV_WITH_ROUND_UP(HIWORD(lParam), dm->charMetric.y);
-    size_t scrollValue = 0;
 
-    switch (dm->mode) {
-    case FORMAT_MODE_DEFAULT:
-        chars = DIV_WITH_ROUND_UP(LOWORD(lParam), dm->charMetric.x);
-        break;
-
-    case FORMAT_MODE_WRAP:
-        chars = DIV_WITH_ROUND_UP(LOWORD(lParam), dm->charMetric.x) - 1;
-        break;
-
-    default:
-        return;
-    }
-
-    if (dm->clientArea.chars != chars) {
-        dm->clientArea.chars = chars;
-        isCharsChanged = 1;
-    }
-
-    if (dm->clientArea.lines != lines) {
-        dm->clientArea.lines = lines;
-        isLinesChanged = 1;
-    }
+    int isCharsChanged = UpdateParameter(&(dm->clientArea.chars), chars);
+    int isLinesChanged = UpdateParameter(&(dm->clientArea.lines), lines);
 
     if (!isCharsChanged && !isLinesChanged) { return; }
 
     switch (dm->mode) {
     case FORMAT_MODE_DEFAULT:
         // Horizontal scroll-bar
-        if (isCharsChanged) {
-            dm->scrollBars.horizontal.maxPos = GetAbsoluteMaxPos(dm->documentArea.chars, dm->clientArea.chars);
-
-            if (dm->scrollBars.horizontal.pos > dm->scrollBars.horizontal.maxPos) {
-                #ifdef CARET_ON
-                    scrollValue = dm->scrollBars.horizontal.pos - dm->scrollBars.horizontal.maxPos;
-                #endif
-
-                dm->scrollBars.horizontal.pos = dm->scrollBars.horizontal.maxPos;
-
-                #ifdef CARET_ON
-                    // left border
-                    CaretTopLeftBorder(hwnd, &(dm->caret.isHidden.x), scrollValue,
-                                        dm->caret.modelPos.pos.x, dm->scrollBars.horizontal.pos,
-                                        &(dm->caret.clientPos.x), DECREMENT_OF(dm->clientArea.chars));
-                #endif
-            }
-            #ifdef CARET_ON
-                else {
-                    // right border
-                    CaretBottomRightBorder(hwnd, &(dm->caret.isHidden.x), 0,
-                                        dm->caret.modelPos.pos.x, dm->scrollBars.horizontal.pos,
-                                        &(dm->caret.clientPos.x), DECREMENT_OF(dm->clientArea.chars));
-                }
-            #endif
-        }
+        if (isCharsChanged) { UpdateHorizontalSB_Default(hwnd, dm); }
 
         // Vertical scroll-bar
-        if (isLinesChanged) {
-            dm->scrollBars.vertical.maxPos = GetAbsoluteMaxPos(dm->documentArea.lines, dm->clientArea.lines);
-
-            if (dm->scrollBars.vertical.pos > dm->scrollBars.vertical.maxPos) {
-                scrollValue = dm->scrollBars.vertical.pos - dm->scrollBars.vertical.maxPos;
-
-                // pass
-                PassPrev(&(dm->scrollBars.modelPos), scrollValue);
-                dm->scrollBars.vertical.pos = dm->scrollBars.vertical.maxPos;
-
-                #ifdef CARET_ON
-                    // top
-                    CaretTopLeftBorder(hwnd, &(dm->caret.isHidden.y), scrollValue,
-                                        dm->caret.modelPos.pos.y, dm->scrollBars.vertical.pos,
-                                        &(dm->caret.clientPos.y), DECREMENT_OF(dm->clientArea.lines));
-                #endif
-            }
-            #ifdef CARET_ON
-                else {
-                    // bottom
-                    CaretBottomRightBorder(hwnd, &(dm->caret.isHidden.y), 0,
-                                        dm->caret.modelPos.pos.y, dm->scrollBars.vertical.pos,
-                                        &(dm->caret.clientPos.y), DECREMENT_OF(dm->clientArea.lines));
-                }
-            #endif
-        }
+        if (isLinesChanged) { UpdateVerticalSB_Default(hwnd, dm); }
         break;
     // FORMAT_MODE_DEFAULT
 
     case FORMAT_MODE_WRAP:
-        PrintWrapModel(&(dm->wrapModel));
-
-        // Horizontal scroll-bar
         if (dm->documentArea.chars >= dm->clientArea.chars && isCharsChanged) {
-            dm->scrollBars.horizontal.maxPos = 0;
+            // Horizontal scroll-bar
             dm->scrollBars.horizontal.pos = 0;
+            dm->scrollBars.horizontal.maxPos = 0;
 
-            dm->wrapModel.isValid = 0;
+            dm->caret.clientPos.x = dm->caret.modelPos.pos.x % dm->clientArea.chars;
+
+            dm->wrapModel.isValid = 0; // for what?
+
+            // Vertical scroll-bar
             dm->scrollBars.vertical.pos = BuildWrapModel(hwnd, dm);
-            PrintWrapModel(&(dm->wrapModel));
         }
 
         // Vertical scroll-bar
-        UpdateVerticalSB_Wrap(dm);
-        PrintWrapModel(&(dm->wrapModel));
+        UpdateVerticalSB_Wrap(hwnd, dm);
         break;
     // FORMAT_MODE_WRAP
 

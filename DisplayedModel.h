@@ -92,7 +92,7 @@ void SwitchMode(HWND hwnd, DisplayedModel* dm, FormatMode mode);
 void DisplayModel(HDC hdc, const DisplayedModel* dm);
 
 // Scroll-bar
-size_t Scroll(HWND hwnd, DisplayedModel* dm, size_t count, Direction dir, RECT* rectangle);
+size_t Scroll(HWND hwnd, DisplayedModel* dm, size_t scrollValue, Direction dir, RECT* rectangle);
 
 // Caret
 #ifdef CARET_ON
@@ -106,7 +106,7 @@ size_t Scroll(HWND hwnd, DisplayedModel* dm, size_t count, Direction dir, RECT* 
     // void CaretGoToEnd_Wrap(HWND hwnd, DisplayedModel* dm, RECT* rectangle);
 
     void FindLeftEnd_Default(HWND hwnd, DisplayedModel* dm, RECT* rectangle);
-    
+
     void FindRightEnd_Default(HWND hwnd, DisplayedModel* dm, RECT* rectangle);
     void FindRightEnd_Wrap(DisplayedModel* dm);
 
@@ -129,9 +129,6 @@ size_t Scroll(HWND hwnd, DisplayedModel* dm, size_t count, Direction dir, RECT* 
 
     void CaretSetPos(DisplayedModel* dm);
     void CaretCreate(HWND hwnd, DisplayedModel* dm);
-    void CaretDestroy(HWND hwnd);
-    void CaretShow(HWND hwnd, int* p_isHidden);
-    void CaretHide(HWND hwnd, int* p_isHidden);
 
     void CaretTopLeftBorder(HWND hwnd, int* p_isHidden, size_t scrollValue, size_t modelPos, size_t scrollBarPos, size_t* pClientPos, size_t clientPosMax);
     void CaretBottomRightBorder(HWND hwnd, int* p_isHidden, size_t scrollValue, size_t modelPos, size_t scrollBarPos, size_t* pClientPos, size_t clientPosMax);
