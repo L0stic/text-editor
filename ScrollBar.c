@@ -1,11 +1,11 @@
 #include "ScrollBar.h"
 
-#define CAMERA_MODE MANY_LINES
-
-typedef enum {
-    ONE_LINE,
-    MANY_LINES
-} CameraMode;
+/*  CAMERA_MODE params:
+*     * ONE_LINE    - expanded area (you can highlight one character);
+*     * MANY_LINES  - text fills all the free space.
+*/
+// #define ONE_LINE
+#define MANY_LINES
 
 void InitScrollBar(ScrollBar* pSB) {
     assert(pSB);
@@ -16,7 +16,6 @@ void InitScrollBar(ScrollBar* pSB) {
 
 static ScrollBar GetRelativeSB(ScrollBar* pSB) {
     assert(pSB && pSB->pos <= pSB->maxPos);
-    assert(CAMERA_MODE == ONE_LINE || CAMERA_MODE == MANY_LINES);
 
     ScrollBar relativeSB;
 
@@ -58,9 +57,12 @@ size_t GetAbsoluteMaxPos(size_t modelAreaParam, size_t clientAreaParam) {
 
     if (!modelAreaParam) { return 0; }
 
-    if (CAMERA_MODE == MANY_LINES) {
-        shift = modelAreaParam < clientAreaParam ? modelAreaParam : clientAreaParam;
-    }
+    if (clientAreaParam == 1) { return modelAreaParam - 1; }
+
+    #ifdef MANY_LINES
+        shift = modelAreaParam < clientAreaParam ? modelAreaParam : (clientAreaParam - 1);
+    #endif
+
     return modelAreaParam - shift;
 }
 
@@ -72,4 +74,18 @@ size_t GetAbsolutePos(size_t relativePos, size_t absoluteMaxPos) {
     }
 
     return absolutePos;
+}
+
+// for debugging
+void PrintScrollBar(const ScrollBar* pSB) {
+    printf("Absolute: pos = %i of [0; %i]\n", pSB->pos, pSB->maxPos);
+}
+
+void CheckScrollBar(const HWND hwnd, int SB_TYPE) {
+    assert(SB_TYPE == SB_HORZ || SB_TYPE == SB_VERT);
+    int pos, bottom, top;
+
+    pos = GetScrollPos(hwnd, SB_TYPE);
+    GetScrollRange(hwnd, SB_TYPE, &bottom, &top);
+    printf("Relative: pos = %i of [%i; %i]\n", pos, bottom, top);
 }
