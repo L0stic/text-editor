@@ -10,6 +10,7 @@
 #include <math.h>
 #include <limits.h>
 
+#include "Error.h"
 #include "Document.h"
 #include "ScrollBar.h"
 
@@ -84,7 +85,7 @@ typedef struct {
     #endif
 } DisplayedModel;
 
-void InitDisplayedModel(DisplayedModel* dm, TEXTMETRIC* tm);
+void InitDisplayedModel(DisplayedModel* dm, TEXTMETRIC const* tm);
 void UpdateDisplayedModel(HWND hwnd, DisplayedModel* dm, LPARAM lParam);
 void CoverDocument(HWND hwnd, DisplayedModel* dm, Document* doc);
 

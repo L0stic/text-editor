@@ -22,10 +22,10 @@ LRESULT CALLBACK WindowProcedure(HWND, UINT, WPARAM, LPARAM);
 
 const TCHAR szClassName[]   = _T("TextEdit");
 const TCHAR szTitle[]       = _T("FileName - TextEdit");
-const char* example = "example.txt";
+const char* example         = "example.txt";
 
 int WINAPI WinMain(HINSTANCE hThisInstance, HINSTANCE hPrevInstance,
-                   LPSTR lpszArgument, int nCmdShow) {
+                    LPSTR lpszArgument, int nCmdShow) {
     HWND        hwnd;       /* This is the handle for our window */
     MSG         messages;   /* Here messages to the application are saved */
     WNDCLASSEX  wincl;      /* Data structure for the windowclass */
@@ -72,7 +72,6 @@ int WINAPI WinMain(HINSTANCE hThisInstance, HINSTANCE hPrevInstance,
 
     /* Make the window visible on the screen */
     ShowWindow(hwnd, nCmdShow);
-    // UpdateWindow(hwnd);
 
     /* Run the message loop. It will run until GetMessage() returns 0 */
     while (GetMessage(&messages, NULL, 0, 0)) {
@@ -109,20 +108,43 @@ void InitOpenFilename(HWND hwnd, OPENFILENAME* ofn) {
     ofn->lpTemplateName     = NULL;
 }
 
-// BOOL FileOpenDlg(HWND hwnd, PSTR pstrFileName, PSTR pstrTitleName) {
+// BOOL FileOpenDlg(HWND hwnd, PSTR pstrFileName, PSTR pstrTitle) {
 BOOL FileOpenDlg(HWND hwnd, OPENFILENAME* ofn, PSTR pstrFileName) {
     ofn->hwndOwner  = hwnd;
     ofn->lpstrFile  = pstrFileName;
-    // ofn->lpstrFileTitle = pstrTitleName;
+    // ofn->lpstrFileTitle = pstrTitle;
     ofn->Flags      = OFN_HIDEREADONLY | OFN_CREATEPROMPT;
 
     return GetOpenFileName(ofn);
+}
+
+static int SetWindowTitle(HWND hwnd, PSTR* oldTitle, const char* title) {
+    assert(oldTitle);
+    static const char* splitter = " - ";
+
+    PSTR pstrTitle = (PSTR)calloc(_MAX_FNAME + _MAX_EXT, sizeof(char));
+    
+    if (!pstrTitle) {
+        PrintError(NULL, ERR_NOMEM, __FILE__, __LINE__);
+        return ERR_NOMEM;
+    }
+    if (*oldTitle) { free(*oldTitle); }
+
+    strcat(pstrTitle, title);
+    strcat(pstrTitle, splitter);
+    strcat(pstrTitle, szClassName);
+
+    *oldTitle = pstrTitle;
+    SetWindowText(hwnd, pstrTitle);
+
+    return ERR_SUCCESS;
 }
 
 /*  This function is called by the Windows function DispatchMessage()  */
 LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
     static OPENFILENAME ofn;
     static PSTR pstrFilename;
+    static PSTR pstrTitle;
 
     static Document*        doc;
     static DisplayedModel   dm;
@@ -142,6 +164,7 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
     case WM_CREATE:
         // device context initialization
         hdc = GetDC(hwnd);
+        pstrTitle = NULL;
 
         SetMapMode(hdc, MM_TEXT);
         SelectObject(hdc, GetStockObject(SYSTEM_FIXED_FONT));
@@ -155,8 +178,8 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
         ReleaseDC(hwnd, hdc);
 
         doc = CreateDocument(example);
-        if (!doc) {
-            printf("All is so bad");
+        if (!doc || SetWindowTitle(hwnd, &pstrTitle, doc->title)) {
+            PrintError(NULL, ERR_NOMEM, __FILE__, __LINE__);
             PostMessage(hwnd, WM_CLOSE, 0, 0);
             break;
         }
@@ -183,11 +206,23 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
             InitOpenFilename(hwnd, &ofn);
             pstrFilename = (PSTR)calloc(_MAX_PATH, sizeof(char));
 
+            if (!pstrFilename) {
+                PrintError(NULL, ERR_NOMEM, __FILE__, __LINE__);
+                PostMessage(hwnd, WM_CLOSE, 0, 0);
+                break;
+            }
+
             if (FileOpenDlg(hwnd, &ofn, pstrFilename)) {
                 Document* newDoc = CreateDocument(ofn.lpstrFile);
+
                 if (newDoc) {
                     DestroyDocument(&doc);
                     doc = newDoc;
+
+                    if (SetWindowTitle(hwnd, &pstrTitle, doc->title)) {
+                        PrintError(NULL, ERR_NOMEM, __FILE__, __LINE__);
+                        PostMessage(hwnd, WM_CLOSE, 0, 0);
+                    }
                     
                     #ifndef DEBUG // ==============================================/
                         PrintDocumentParameters(NULL, doc);
@@ -197,10 +232,15 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
                 }
 
                 #ifndef DEBUG // ==============================================/
-                    printf("%s %s\n", pstrFilename, ofn.lpstrFile);
+                    // printf("%s %s\n", pstrFilename, ofn.lpstrFile);
+                    // printf("%s\n", ofn.lpstrFileTitle);
                 #endif // =====================================================/
             }
             free(pstrFilename);
+
+            #ifdef CARET_ON
+                CaretSetPos(&dm);
+            #endif
             break;
 
         case IDM_FILE_EXIT:
@@ -711,6 +751,8 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
 
     case WM_DESTROY:
         if (doc) { DestroyDocument(&doc); }
+        if (pstrTitle) { free(pstrTitle); }
+
         PostQuitMessage(0); /* send a WM_QUIT to the message queue */
         break;
     // WM_DESTROY

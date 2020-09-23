@@ -4,7 +4,7 @@
 // DISPLAY_STEP
 #define STEP 1
 
-static void InitModelPos(ModelPos* pMP, Block* block) {
+static void InitModelPos(ModelPos* pMP, Block const* block) {
     assert(pMP);
 
     pMP->block = block;
@@ -12,7 +12,7 @@ static void InitModelPos(ModelPos* pMP, Block* block) {
     pMP->pos.y = 0;
 }
 
-void InitDisplayedModel(DisplayedModel* dm, TEXTMETRIC* tm) {
+void InitDisplayedModel(DisplayedModel* dm, TEXTMETRIC const* tm) {
     assert(dm);
     assert(tm);
 
@@ -36,10 +36,10 @@ void InitDisplayedModel(DisplayedModel* dm, TEXTMETRIC* tm) {
     InitModelPos(&(dm->scrollBars.modelPos), NULL);
 
     #ifdef CARET_ON
-        dm->caret.isHidden.x = 0;
-        dm->caret.isHidden.y = 0;
         dm->caret.clientPos.x = 0;
         dm->caret.clientPos.y = 0;
+        dm->caret.isHidden.x = 0;
+        dm->caret.isHidden.y = 0;
         InitModelPos(&(dm->caret.modelPos), NULL);
     #endif
 }
@@ -143,8 +143,20 @@ static size_t BuildWrapModel(HWND hwnd, DisplayedModel* dm) {
     return absolutePos;
 }
 
+static void PrintSBs(DisplayedModel const* dm) {
+    assert(dm);
+
+    printf("\tHorizontal\n");
+    PrintScrollBar(&(dm->scrollBars.horizontal));
+    printf("\tVertical\n");
+    PrintScrollBar(&(dm->scrollBars.vertical));
+    putchar('\n');
+}
+
 void CoverDocument(HWND hwnd, DisplayedModel* dm, Document* doc) {
-    printf("Cover document\n");
+    #ifndef DEBUG // ================================/
+        printf("Cover document\n");
+    #endif // =======================================/
     assert(dm && doc);
 
     dm->doc = doc;
@@ -158,10 +170,10 @@ void CoverDocument(HWND hwnd, DisplayedModel* dm, Document* doc) {
     InitModelPos(&(dm->scrollBars.modelPos), doc->blocks->nodes);
 
     #ifdef CARET_ON
-        dm->caret.isHidden.x = 0;
-        dm->caret.isHidden.y = 0;
         dm->caret.clientPos.x = 0;
         dm->caret.clientPos.y = 0;
+        if (dm->caret.isHidden.x) { CaretShow(hwnd, &(dm->caret.isHidden.x)); }
+        if (dm->caret.isHidden.y) { CaretShow(hwnd, &(dm->caret.isHidden.y)); }
         InitModelPos(&(dm->caret.modelPos), doc->blocks->nodes);
     #endif
 
@@ -182,7 +194,7 @@ void CoverDocument(HWND hwnd, DisplayedModel* dm, Document* doc) {
         break;
 
     default:
-        // TODO: ERROR
+        PrintError(NULL, ERR_PARAM, __FILE__, __LINE__);
         return;
     }
 
@@ -190,11 +202,7 @@ void CoverDocument(HWND hwnd, DisplayedModel* dm, Document* doc) {
     SetRelativeParam(hwnd, &(dm->scrollBars.vertical), SB_VERT);
 
     #ifndef DEBUG // ================================/
-        // printf("\tHorizontal\n");
-        // PrintScrollBar(&(dm->scrollBars.horizontal));
-        // printf("\tVertical\n");
-        // PrintScrollBar(&(dm->scrollBars.vertical));
-        // putchar('\n');
+        // PrintSBs(dm);
     #endif // =======================================/
 }
 
@@ -769,7 +777,7 @@ size_t Scroll(HWND hwnd, DisplayedModel* dm, size_t count, Direction direction, 
     void CaretCreate(HWND hwnd, DisplayedModel* dm) {
         assert(dm);
 
-        CreateCaret(hwnd, NULL, dm->charMetric.x, dm->charMetric.y);
+        CreateCaret(hwnd, NULL, 1, dm->charMetric.y);
         CaretSetPos(dm);
         ShowCaret(hwnd);
     }
@@ -1130,7 +1138,9 @@ void UpdateDisplayedModel(HWND hwnd, DisplayedModel* dm, LPARAM lParam) {
             dm->scrollBars.horizontal.pos = 0;
             dm->scrollBars.horizontal.maxPos = 0;
 
-            dm->caret.clientPos.x = dm->caret.modelPos.pos.x % dm->clientArea.chars;
+            #ifdef CARET_ON
+                dm->caret.clientPos.x = dm->caret.modelPos.pos.x % dm->clientArea.chars;
+            #endif
 
             dm->wrapModel.isValid = 0; // for what?
 

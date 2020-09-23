@@ -1,5 +1,7 @@
 #include "Document.h"
 
+#define UNTITLED_TITLE "Untitled"
+
 static void SetTitle(Document* doc, char** title) {
     assert(doc && title && *title);
 
@@ -24,7 +26,7 @@ static void SetBlocks(Document* doc, ListBlock** blocks) {
     *blocks = NULL;
 }
 
-static char* GetUntitledTittle() {
+static char* GetUntitledTitle() {
     const char* title = UNTITLED_TITLE;
     char* tmp = malloc((strlen(title) + 1) * sizeof(char));
 
@@ -33,35 +35,14 @@ static char* GetUntitledTittle() {
     return tmp;
 }
 
-int SetUntitledFile(Document* doc) {
-    assert(doc);
-
-    String* text = CreateString(NULL);
-    if (!text) { return -1; }
-
-    if (ReserveSize(text, BASE_STRING_SIZE)) {
-        DestroyString(&text);
-        return -2;
-    }
-
-    char* title = GetUntitledTittle();
-    if (!title) {
-        DestroyString(&text);
-        return -3;
-    }
-
-    SetText(doc, &text);
-    SetTitle(doc, &title);
-    return 0;
-}
-
 static char* GetTitle(const char* filename) {
     assert(filename);
 
+    char* title;
     char* titleStart = (char*)filename + strlen(filename);
-    while((titleStart > filename) && (*titleStart != '\\')) { --titleStart; }
+    while((titleStart > filename) && (*(titleStart - 1) != '\\')) { --titleStart; }
 
-    char* title = malloc(sizeof(char) * (strlen(titleStart) + 1));
+    title = malloc(sizeof(char) * (strlen(titleStart) + 1));
     if (title) { strcpy(title, titleStart); }
 
     return title;
@@ -89,49 +70,16 @@ static int InsertBlock(ListBlock* blocks, size_t blockLen) {
     return AddBlockData(blocks, blockData);
 }
 
-int SetFile(Document* doc, const char* filename) {
-    assert(doc);
+static int ScanFile(FILE* file, ListBlock* blocks, String* text) {
+    assert(file && blocks && text);
 
-    FILE* file = fopen(filename, "r");
-    if (!file) { return -1; }
-
-    long size = GetFileSize(file);
-    if (size < 0) {
-        fclose(file);
-        return -2;
-    }
-
-    ListBlock* blocks = CreateListBlock();
-    if (!blocks) {
-        fclose(file);
-        return -3;
-    }
-
-    String* text = CreateString(NULL);
-    if (!text) {
-        DestroyListBlock(&blocks);
-        fclose(file);
-        return -3;
-    }
-
-    if (ReserveSize(text, (size_t)size)) {
-        DestroyListBlock(&blocks);
-        DestroyString(&text);
-        fclose(file);
-        return -4;
-    }
-
-    // Scaning
     char* buffer = malloc((BASE_STRING_SIZE + 1) * sizeof(char));
+
     if (!buffer) {
-        DestroyListBlock(&blocks);
-        DestroyString(&text);
-        fclose(file);
-        return -5;
+        PrintError(NULL, ERR_NOMEM, __FILE__, __LINE__);
+        return ERR_NOMEM;
     }
 
-    // TODO: - add error-handler
-    //       - handle ferr
     size_t blockLen = 0;
     while (!feof(file)) {
         if (fgets(buffer, BASE_STRING_SIZE + 1, file)) {
@@ -141,11 +89,9 @@ int SetFile(Document* doc, const char* filename) {
 
             if (len > 0 && buffer[len - 1] == '\n') {
                 if (InsertBlock(blocks, blockLen - 1)) {
-                    DestroyListBlock(&blocks);
-                    DestroyString(&text);
                     free(buffer);
-                    fclose(file);
-                    return -6;
+                    PrintError(NULL, ERR_NOMEM, __FILE__, __LINE__);
+                    return ERR_NOMEM;
                 }
 
                 blockLen = 0;
@@ -153,50 +99,111 @@ int SetFile(Document* doc, const char* filename) {
             }
 
             if (AddString(text, buffer) < 0) {
-                DestroyListBlock(&blocks);
-                DestroyString(&text);
                 free(buffer);
+                PrintError(NULL, ERR_NOMEM, __FILE__, __LINE__);
+                return ERR_NOMEM;
+            }
+        }
+    }
+    free(buffer);
+
+    // if (blockLen > 0 && InsertBlock(blocks, blockLen)) {
+    if (InsertBlock(blocks, blockLen)) {
+        PrintError(NULL, ERR_NOMEM, __FILE__, __LINE__);
+        return ERR_NOMEM;
+    }
+
+    return ERR_SUCCESS;
+}
+
+int SetFile(Document* doc, char const* filename) {
+    assert(doc);
+
+    ListBlock* blocks;
+    String* text;
+    FILE* file;
+    long size;
+    char* title;
+    
+    if (filename) {
+        file = fopen(filename, "r");
+        if (!file) {
+            PrintError(NULL, ERR_OPEN_FILE, __FILE__, __LINE__);
+            filename = NULL;
+        } else {
+            size = GetFileSize(file);
+            if (size < 0) {
                 fclose(file);
-                return -7;
+                PrintError(NULL, ERR_READ, __FILE__, __LINE__);
+                return ERR_READ;
+            } else if (!size) {
+                size = BASE_STRING_SIZE;
             }
         }
     }
 
-    if (blockLen > 0) {
-        if (InsertBlock(blocks, blockLen)) {
-            DestroyListBlock(&blocks);
-            DestroyString(&text);
-            free(buffer);
-            fclose(file);
-            return -6;
-        }
+    blocks = CreateListBlock();
+    if (!blocks) {
+        if (filename) { fclose(file); }
+        PrintError(NULL, ERR_NOMEM, __FILE__, __LINE__);
+        return ERR_NOMEM;
     }
 
-    free(buffer);
-    fclose(file);
+    text = CreateString(NULL);
+    if (!text) {
+        DestroyListBlock(&blocks);
+        if (filename) { fclose(file); }
+        PrintError(NULL, ERR_NOMEM, __FILE__, __LINE__);
+        return ERR_NOMEM;
+    }
 
-    char* title = GetTitle(filename);
+    if (ReserveSize(text, filename ? (size_t)size : BASE_STRING_SIZE)) {
+        DestroyListBlock(&blocks);
+        DestroyString(&text);
+        if (filename) { fclose(file); }
+        PrintError(NULL, ERR_NOMEM, __FILE__, __LINE__);
+        return ERR_NOMEM;
+    }
+
+    if (filename) {
+        if (ScanFile(file, blocks, text)) {
+            DestroyListBlock(&blocks);
+            DestroyString(&text);
+            fclose(file);
+            PrintError(NULL, ERR_NOMEM, __FILE__, __LINE__);
+            return ERR_NOMEM;
+        }
+        fclose(file);
+    } else if (InsertBlock(blocks, 0)) {
+        DestroyListBlock(&blocks);
+        DestroyString(&text);
+        PrintError(NULL, ERR_NOMEM, __FILE__, __LINE__);
+        return ERR_NOMEM;
+    }
+
+    title = filename ? GetTitle(filename) : GetUntitledTitle();
     if (!title) {
         DestroyListBlock(&blocks);
         DestroyString(&text);
-        return -8;
+        PrintError(NULL, ERR_NOMEM, __FILE__, __LINE__);
+        return ERR_NOMEM;
     }
 
     SetTitle(doc, &title);
     SetText(doc, &text);
     SetBlocks(doc, &blocks);
-    return 0;
+    return ERR_SUCCESS;
 }
 
-Document* CreateDocument(const char* filename) {
+Document* CreateDocument(char const* filename) {
+    assert(filename);
+
     Document* doc = calloc(1, sizeof(Document));
 
     if (!doc) { return NULL; }
 
-    if (filename) {
-        SetFile(doc, filename);
-    } else {
-        SetUntitledFile(doc);
+    if (SetFile(doc, filename)) {
+        DestroyDocument(&doc);
     }
 
     return doc;
@@ -214,7 +221,7 @@ void DestroyDocument(Document** ppDoc) {
     *ppDoc = NULL;
 }
 
-size_t PrintDocument(FILE* output, const Document* doc) {
+size_t PrintDocument(FILE* output, Document const* doc) {
     assert(doc);
     size_t counter = 0;
 
@@ -232,7 +239,7 @@ size_t PrintDocument(FILE* output, const Document* doc) {
     return counter;
 }
 
-void PrintDocumentParameters(FILE* output, const Document* doc) {
+void PrintDocumentParameters(FILE* output, Document const* doc) {
     assert(doc);
     const char* null = "NULL";
 
@@ -257,7 +264,7 @@ void PrintDocumentParameters(FILE* output, const Document* doc) {
     }
 }
 
-size_t GetMaxBlockLen(ListBlock* blocks) {
+size_t GetMaxBlockLen(ListBlock const* blocks) {
     assert(blocks && blocks->nodes);
 
     size_t maxLen = 0;
