@@ -133,6 +133,11 @@ size_t Scroll(HWND hwnd, DisplayedModel* dm, size_t scrollValue, Direction dir, 
 
     void CaretTopLeftBorder(HWND hwnd, int* p_isHidden, size_t scrollValue, size_t modelPos, size_t scrollBarPos, size_t* pClientPos, size_t clientPosMax);
     void CaretBottomRightBorder(HWND hwnd, int* p_isHidden, size_t scrollValue, size_t modelPos, size_t scrollBarPos, size_t* pClientPos, size_t clientPosMax);
+
+    // editing
+    int CaretAddChar(HWND hwnd, DisplayedModel* dm, char c);
+    int CaretAddBlock(HWND hwnd, DisplayedModel* dm);
+    int CaretDelete(HWND hwnd, DisplayedModel* dm);
 #endif
 
 #endif // DISPLAYED_MODEL_H_INCLUDED

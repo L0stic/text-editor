@@ -1,7 +1,7 @@
-#include "Block.h"
+#include "Fragment.h"
 
-CREATE_NODE(Block, BlockData_t) {
-    Block* node = malloc(sizeof(Block));
+CREATE_NODE(Fragment, FragmentData_t) {
+    Fragment* node = malloc(sizeof(Fragment));
 
     if (!node) { return NULL; }
 
@@ -12,32 +12,28 @@ CREATE_NODE(Block, BlockData_t) {
     return node;
 }
 
-DESTROY_NODE(Block) {
+DESTROY_NODE(Fragment) {
     assert(node && *node);
-
-    if ((*node)->data.fragments) {
-        DestroyListFragment(&(*node)->data.fragments);
-    }
     free(*node);
     *node = NULL;
 }
 
-CREATE_LIST(Block) {
-    ListBlock* list = calloc(1, sizeof(ListBlock));
+CREATE_LIST(Fragment) {
+    ListFragment* list = calloc(1, sizeof(ListFragment));
 
     if (!list) { return NULL; }
 
     return list;
 }
 
-DESTROY_LIST(Block) {
+DESTROY_LIST(Fragment) {
     assert(list && *list);
 
-    Block* node = (*list)->nodes;
+    Fragment* node = (*list)->nodes;
     while(node) {
-        Block* nextNode = node->next;
+        Fragment* nextNode = node->next;
         
-        DestroyBlock(&node);
+        DestroyFragment(&node);
         node = nextNode;
     }
 
@@ -45,11 +41,11 @@ DESTROY_LIST(Block) {
     *list = NULL;
 }
 
-ADD_DATA(Block, BlockData_t) {
+ADD_DATA(Fragment, FragmentData_t) {
     assert(list);
 
-    Block* prev = list->last;
-    Block* node = CreateBlock(prev, data);
+    Fragment* prev = list->last;
+    Fragment* node = CreateFragment(prev, data);
 
     if (!node) { return -1; }
 
@@ -64,7 +60,7 @@ ADD_DATA(Block, BlockData_t) {
     return 0;
 }
 
-INSERT_NODE(Block) {
+INSERT_NODE(Fragment) {
     assert(list && node);
 
     if (node->prev) {

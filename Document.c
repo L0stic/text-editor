@@ -61,13 +61,39 @@ static long GetFileSize(FILE* file) {
     return fileSize;
 }
 
-static int InsertBlock(ListBlock* blocks, size_t blockLen) {
+static int DocInsertBlock(ListBlock* blocks, size_t blockLen) {
     assert(blocks);
 
-    size_t pos = blocks->last ? blocks->last->data.pos + blocks->last->data.len : 0;
-    BlockData_t blockData = {blockLen, pos, NULL};
+    size_t pos;
+    ListFragment* fragments = CreateListFragment();
+    
+    if (!fragments) {
+        PrintError(NULL, ERR_NOMEM, __FILE__, __LINE__);
+        return ERR_NOMEM;
+    }
 
-    return AddBlockData(blocks, blockData);
+    if (blocks->last) {
+        Fragment* fragment = blocks->last->data.fragments->last;
+        pos = fragment->data.pos + fragment->data.len;
+    } else {
+        pos = 0;
+    }
+
+    FragmentData_t fragmentData = {blockLen, pos};
+    if (AddFragmentData(fragments, &fragmentData)) {
+        DestroyListFragment(&fragments);
+        PrintError(NULL, ERR_NOMEM, __FILE__, __LINE__);
+        return ERR_NOMEM;
+    }
+
+    BlockData_t blockData = {blockLen, fragments};
+    if (AddBlockData(blocks, &blockData)) {
+        DestroyListFragment(&fragments);
+        PrintError(NULL, ERR_NOMEM, __FILE__, __LINE__);
+        return ERR_NOMEM;
+    }
+
+    return ERR_SUCCESS;
 }
 
 static int ScanFile(FILE* file, ListBlock* blocks, String* text) {
@@ -88,7 +114,7 @@ static int ScanFile(FILE* file, ListBlock* blocks, String* text) {
             blockLen += len;
 
             if (len > 0 && buffer[len - 1] == '\n') {
-                if (InsertBlock(blocks, blockLen - 1)) {
+                if (DocInsertBlock(blocks, blockLen - 1)) {
                     free(buffer);
                     PrintError(NULL, ERR_NOMEM, __FILE__, __LINE__);
                     return ERR_NOMEM;
@@ -107,8 +133,7 @@ static int ScanFile(FILE* file, ListBlock* blocks, String* text) {
     }
     free(buffer);
 
-    // if (blockLen > 0 && InsertBlock(blocks, blockLen)) {
-    if (InsertBlock(blocks, blockLen)) {
+    if (DocInsertBlock(blocks, blockLen)) {
         PrintError(NULL, ERR_NOMEM, __FILE__, __LINE__);
         return ERR_NOMEM;
     }
@@ -174,7 +199,7 @@ int SetFile(Document* doc, char const* filename) {
             return ERR_NOMEM;
         }
         fclose(file);
-    } else if (InsertBlock(blocks, 0)) {
+    } else if (DocInsertBlock(blocks, 0)) {
         DestroyListBlock(&blocks);
         DestroyString(&text);
         PrintError(NULL, ERR_NOMEM, __FILE__, __LINE__);
@@ -228,9 +253,11 @@ size_t PrintDocument(FILE* output, Document const* doc) {
     if (!output) { output = stdout; }
 
     for (Block* block = doc->blocks->nodes; block; block = block->next) {
-        for (size_t i = 0; i < block->data.len; ++i) {
-            fputc(doc->text->data[block->data.pos + i], output);
-            ++counter;
+        for (Fragment* fragment = block->data.fragments->nodes; fragment; fragment = fragment->next) {
+            for (size_t i = 0; i < fragment->data.len; ++i) {
+                fputc(doc->text->data[fragment->data.pos + i], output);
+                ++counter;
+            }
         }
         fputc('\n', output);
         ++counter;

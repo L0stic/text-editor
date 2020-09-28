@@ -8,6 +8,7 @@
 #include "Error.h"
 
 #include "String.h"
+#include "Fragment.h"
 #include "Block.h"
 typedef struct Document_tag {
     char* title;                // pointer to a title of file

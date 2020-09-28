@@ -6,11 +6,11 @@
 #include <assert.h>
 
 #include "List.h"
+#include "Fragment.h"
 
 typedef struct BlockData_tag {
     size_t len;
-    size_t pos;
-    char* start;
+    ListFragment* fragments;
 } BlockData_t;
 
 LIST_TEMPLATE(Block, BlockData_t)
