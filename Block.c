@@ -75,7 +75,9 @@ INSERT_NODE(Block) {
         list->nodes = node;
     }
 
-    if (!node->next) {
+    if (node->next) {
+        node->next->prev = node;
+    } else {
         list->last = node;
     }
 

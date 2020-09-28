@@ -103,9 +103,6 @@ size_t Scroll(HWND hwnd, DisplayedModel* dm, size_t scrollValue, Direction dir, 
     void FindHome_Default(HWND hwnd, DisplayedModel* dm, RECT* rectangle);
     void FindHome_Wrap(DisplayedModel* dm);
 
-    // void CaretGoToEnd_Default(HWND hwnd, DisplayedModel* dm, RECT* rectangle);
-    // void CaretGoToEnd_Wrap(HWND hwnd, DisplayedModel* dm, RECT* rectangle);
-
     void FindLeftEnd_Default(HWND hwnd, DisplayedModel* dm, RECT* rectangle);
 
     void FindRightEnd_Default(HWND hwnd, DisplayedModel* dm, RECT* rectangle);

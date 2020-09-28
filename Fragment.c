@@ -71,7 +71,9 @@ INSERT_NODE(Fragment) {
         list->nodes = node;
     }
 
-    if (!node->next) {
+    if (node->next) {
+        node->next->prev = node;
+    } else {
         list->last = node;
     }
 

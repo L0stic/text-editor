@@ -1163,6 +1163,7 @@ static void UpdateVerticalSB_Wrap(HWND hwnd, DisplayedModel* dm) {
     int CaretAddBlock(HWND hwnd, DisplayedModel* dm) {
         assert(dm);
         int isSplitted = 0;
+        int isChangeLen;
 
         // prepare
         ListFragment* newFragments = CreateListFragment();
@@ -1192,6 +1193,7 @@ static void UpdateVerticalSB_Wrap(HWND hwnd, DisplayedModel* dm) {
                 PrintError(NULL, ERR_NOMEM, __FILE__, __LINE__);
                 return ERR_NOMEM;
             }
+
             newFragment = fragment->next;
             isSplitted = 1;
         } else if (delta == fragment->data.len && fragment->next) {
@@ -1199,7 +1201,7 @@ static void UpdateVerticalSB_Wrap(HWND hwnd, DisplayedModel* dm) {
             isSplitted = 1;
         } else {
             FragmentData_t fragmentData = { 0, dm->doc->text->len };
-            newFragment = CreateFragment(delta ? fragment : NULL, &fragmentData);
+            newFragment = CreateFragment(NULL, &fragmentData);
 
             if (!newFragment) {
                 DestroyListFragment(&newFragments);
@@ -1211,20 +1213,17 @@ static void UpdateVerticalSB_Wrap(HWND hwnd, DisplayedModel* dm) {
         // insert
         Block* block = dm->caret.modelPos.block;
         Block* newBlock;
-        BlockData_t blockData;
-        int isChangeLen = block->data.len == dm->documentArea.chars;
+        BlockData_t blockData = { 0, newFragments };
+        isChangeLen = block->data.len == dm->documentArea.chars;
 
-        if (!delta) {
-            blockData.len = 0;
-            blockData.fragments = newFragments;
-
-            newBlock = CreateBlock(block->prev, &blockData);
-        } else {
+        blockData.fragments = newFragments;
+        if (isSplitted) {
             blockData.len = block->data.len - dm->caret.modelPos.pos.x;
-            blockData.fragments = newFragments;
-
-            newBlock = CreateBlock(block, &blockData);
+        } else if (!delta) {
+            block = block->prev;
         }
+
+        newBlock = CreateBlock(block, &blockData);
 
         if (!newBlock) {
             DestroyListFragment(&newFragments);
@@ -1234,15 +1233,35 @@ static void UpdateVerticalSB_Wrap(HWND hwnd, DisplayedModel* dm) {
             return ERR_NOMEM;
         }
 
-        if (delta) {
-            newFragment->prev->next = NULL;
+        if (isSplitted) {
             newFragment->prev = NULL;
             newFragments->len = fragments->len - counter;
+
+            fragment->next = NULL;
             fragments->len = counter;
-        } else {
+
+            block->data.len = dm->caret.modelPos.pos.x;
+        } else if (!delta) {
+            if (dm->caret.modelPos.block == dm->scrollBars.modelPos.block) {
+                switch (dm->mode) {
+                case FORMAT_MODE_DEFAULT:
+                    dm->scrollBars.modelPos.block = newBlock;
+                    break;
+
+                case FORMAT_MODE_WRAP:
+                    if (dm->scrollBars.modelPos.pos.x == 1) {
+                        dm->scrollBars.modelPos.block = newBlock;
+                    }
+                    break;
+
+                default:
+                    break;
+                }
+            }
             dm->caret.modelPos.block = newBlock;
         }
 
+        InsertFragment(newFragments, newFragment);
         InsertBlock(dm->doc->blocks, newBlock);
 
         // update
