@@ -58,6 +58,10 @@
 			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="Error.h" />
+		<Unit filename="Fragment.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="Fragment.h" />
 		<Unit filename="List.h" />
 		<Unit filename="Menu.h" />
 		<Unit filename="Menu.rc">

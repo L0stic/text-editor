@@ -23,6 +23,8 @@ int ReserveSize(String* str, size_t size);
 
 int AddString(String* str, const char* src);
 
+int AddChar(String* str, char c);
+
 size_t PrintString(FILE* output, const String* str);
 
 #endif // STRING_H_INCLUDED
