@@ -665,24 +665,24 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
             #endif
             break;
         
-        // case VK_DELETE:
-        //     #ifdef CARET_ON
-        //         FindCaret(hwnd, &dm, &rectangle);
+        case VK_DELETE:
+            #ifdef CARET_ON
+                FindCaret(hwnd, &dm, &rectangle);
 
-        //         // switch (dm.mode) {
-        //         // case FORMAT_MODE_DEFAULT:
-        //         //     FindRightEnd_Default(hwnd, &dm, &rectangle);
-        //         //     break;
+                HideCaret(hwnd);
 
-        //         // case FORMAT_MODE_WRAP:
-        //         //     FindRightEnd_Wrap(&dm);
-        //         //     break;
+                if (dm.caret.modelPos.block->data.len && dm.caret.modelPos.pos.x < dm.caret.modelPos.block->data.len) {
+                    CaretDeleteChar(hwnd, &dm);
+                } else if (dm.caret.modelPos.block->next) {
+                    CaretDeleteBlock(hwnd, &dm);
+                }
 
-        //         // default:
-        //         //     break;
-        //         // }
-        //     #endif
-        //     break;
+                InvalidateRect(hwnd, NULL, TRUE);
+                UpdateWindow(hwnd);
+
+                ShowCaret(hwnd);
+            #endif
+            break;
 
         default:
             break;
@@ -695,11 +695,14 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
         break;
     // WM_KEYDOWN
 
-    case WM_CHAR :
+    case WM_CHAR:
+        FindCaret(hwnd, &dm, &rectangle);
+        
         for(int i = 0; i < (int) LOWORD(lParam); i++) {
             switch(wParam) {
             case '\b' : // backspace
                 if(dm.caret.modelPos.pos.y || dm.caret.modelPos.pos.x) {
+                    SendMessage(hwnd, WM_KEYDOWN, VK_LEFT, 1L);
                     SendMessage(hwnd, WM_KEYDOWN, VK_DELETE, 1L);
                 }
                 break;

@@ -26,7 +26,8 @@
 #define CREATE_LIST(T)      List##T* CreateList##T()
 #define DESTROY_LIST(T)     void DestroyList##T(List##T** list)
 #define ADD_DATA(T, D)      int Add##T##Data(List##T* list, const D* data)
-#define INSERT_NODE(T)      void Insert##T(List##T* list, T* node)
+#define INSERT_NODES(T)      void Insert##T##s(List##T* list, T* node)
+#define DELETE_NODE(T)      void Delete##T(List##T* list, T* node)
 
 #define LIST_TEMPLATE(T, D) \
     NODE(T, D)          \
@@ -39,7 +40,8 @@
     DESTROY_LIST(T);    \
     \
     ADD_DATA(T, D);     \
-    INSERT_NODE(T);     \
+    INSERT_NODES(T);    \
+    DELETE_NODE(T);     \
 // END_LIST_TEMPLATE
 
 #endif // LIST_H_INCLUDED

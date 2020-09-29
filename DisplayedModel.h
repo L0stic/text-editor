@@ -134,7 +134,8 @@ size_t Scroll(HWND hwnd, DisplayedModel* dm, size_t scrollValue, Direction dir, 
     // editing
     int CaretAddChar(HWND hwnd, DisplayedModel* dm, char c);
     int CaretAddBlock(HWND hwnd, DisplayedModel* dm);
-    int CaretDelete(HWND hwnd, DisplayedModel* dm);
+    int CaretDeleteChar(HWND hwnd, DisplayedModel* dm);
+    void CaretDeleteBlock(HWND hwnd, DisplayedModel* dm);
 #endif
 
 #endif // DISPLAYED_MODEL_H_INCLUDED

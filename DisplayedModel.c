@@ -4,7 +4,7 @@
 // DISPLAY_STEP
 #define STEP 1
 
-static void InitModelPos(ModelPos* pMP, Block const* block) {
+static void InitModelPos(ModelPos* pMP, const Block* block) {
     assert(pMP);
 
     pMP->block = block;
@@ -12,7 +12,7 @@ static void InitModelPos(ModelPos* pMP, Block const* block) {
     pMP->pos.y = 0;
 }
 
-void InitDisplayedModel(DisplayedModel* dm, TEXTMETRIC const* tm) {
+void InitDisplayedModel(DisplayedModel* dm, const TEXTMETRIC* tm) {
     assert(dm);
     assert(tm);
 
@@ -1059,7 +1059,7 @@ static void UpdateVerticalSB_Wrap(HWND hwnd, DisplayedModel* dm) {
 
         if (!newFragment) { return ERR_NOMEM; }
 
-        InsertFragment(fragments, newFragment);
+        InsertFragments(fragments, newFragment);
         prevFragment->data.len = delta;
 
         return ERR_SUCCESS;
@@ -1128,11 +1128,11 @@ static void UpdateVerticalSB_Wrap(HWND hwnd, DisplayedModel* dm) {
                 }
             }
 
-            InsertFragment(fragments, newFragment);
+            InsertFragments(fragments, newFragment);
         }
 
         // update
-        dm->caret.modelPos.block->data.len++;
+        ++dm->caret.modelPos.block->data.len;
 
         if (dm->documentArea.chars < dm->caret.modelPos.block->data.len) {
             dm->documentArea.chars = dm->caret.modelPos.block->data.len;
@@ -1144,7 +1144,7 @@ static void UpdateVerticalSB_Wrap(HWND hwnd, DisplayedModel* dm) {
         }
 
         if (dm->mode == FORMAT_MODE_WRAP) {
-            size_t linesBlock;
+            size_t linesBlock = 1;
 
             if (dm->caret.modelPos.block->data.len != 1) {
                 linesBlock = DIV_WITH_ROUND_UP(dm->caret.modelPos.block->data.len - 1, dm->clientArea.chars);
@@ -1261,8 +1261,8 @@ static void UpdateVerticalSB_Wrap(HWND hwnd, DisplayedModel* dm) {
             dm->caret.modelPos.block = newBlock;
         }
 
-        InsertFragment(newFragments, newFragment);
-        InsertBlock(dm->doc->blocks, newBlock);
+        InsertFragments(newFragments, newFragment);
+        InsertBlocks(dm->doc->blocks, newBlock);
 
         // update
         ++dm->documentArea.lines;
@@ -1295,8 +1295,125 @@ static void UpdateVerticalSB_Wrap(HWND hwnd, DisplayedModel* dm) {
         return ERR_SUCCESS;
     }
 
-    int CaretDelete(HWND hwnd, DisplayedModel* dm) {
-        return 0;
+    int CaretDeleteChar(HWND hwnd, DisplayedModel* dm) {
+        assert(dm);
+        assert(dm->caret.modelPos.block->data.len);
+
+        ListFragment* fragments = dm->caret.modelPos.block->data.fragments;
+        Fragment* fragment = fragments->nodes;
+
+        // TODO: simplify text
+
+        // find place
+        size_t delta = dm->caret.modelPos.pos.x;
+        while (delta > fragment->data.len) {
+            delta -= fragment->data.len;
+            fragment = fragment->next;
+        }
+
+        // split
+        if (delta && delta < fragment->data.len) {
+            if (SplitFragment(fragments, fragment, delta)) {
+                PrintError(NULL, ERR_NOMEM, __FILE__, __LINE__);
+                return ERR_NOMEM;
+            }
+
+            fragment = fragment->next;
+        } else if (delta == fragment->data.len) {
+            fragment = fragment->next;
+        }
+
+        // delete
+        --fragment->data.len;
+        ++fragment->data.pos;
+
+        if (!fragment->data.len && fragments->len > 1) {
+            DeleteFragment(fragments, fragment);
+        }
+
+        // update
+        --dm->caret.modelPos.block->data.len;
+
+        if (dm->documentArea.chars == dm->caret.modelPos.block->data.len + 1) {
+            dm->documentArea.chars = GetMaxBlockLen(dm->doc->blocks);
+
+            if (dm->mode == FORMAT_MODE_DEFAULT) {
+                UpdateHorizontalSB_Default(hwnd, dm);
+                SetRelativeParam(hwnd, &(dm->scrollBars.horizontal), SB_HORZ);
+            }
+        }
+
+        if (dm->mode == FORMAT_MODE_WRAP && ((dm->caret.modelPos.block->data.len + 1) > dm->clientArea.chars)) {
+            size_t linesBlock = DIV_WITH_ROUND_UP(dm->caret.modelPos.block->data.len + 1, dm->clientArea.chars);
+
+            if (linesBlock > DIV_WITH_ROUND_UP(dm->caret.modelPos.block->data.len, dm->clientArea.chars)) {
+                --dm->wrapModel.lines;
+                UpdateVerticalSB_Wrap(hwnd, dm);
+                SetRelativeParam(hwnd, &(dm->scrollBars.vertical), SB_VERT);
+            }
+        }
+
+        return ERR_SUCCESS;
+    }
+
+    void CaretDeleteBlock(HWND hwnd, DisplayedModel* dm) {
+        assert(dm);
+        assert(dm->caret.modelPos.pos.x == dm->caret.modelPos.block->data.len);
+        assert(dm->caret.modelPos.block->next);
+
+        Block* block = dm->caret.modelPos.block;
+        Block* nextBlock = block->next;
+
+        ListFragment* fragments = block->data.fragments;
+
+        if (!block->data.len) {
+            if (dm->scrollBars.modelPos.block == block) {
+                dm->scrollBars.modelPos.block = nextBlock;
+            }
+            dm->caret.modelPos.block = nextBlock;
+
+            DeleteBlock(dm->doc->blocks, block);
+        } else if (!nextBlock->data.len) {
+            DeleteBlock(dm->doc->blocks, nextBlock);
+        } else {
+            ListFragment* fragments = block->data.fragments;
+            nextBlock->data.fragments->nodes->prev = fragments->last;
+            InsertFragments(fragments, nextBlock->data.fragments->nodes);
+
+            nextBlock->data.fragments = NULL;
+            block->data.len += nextBlock->data.len;
+
+            DeleteBlock(dm->doc->blocks, nextBlock);
+
+            // update horizontal params
+            if (block->data.len > dm->documentArea.chars) {
+                dm->documentArea.chars = GetMaxBlockLen(dm->doc->blocks);
+
+                if (dm->mode == FORMAT_MODE_DEFAULT) {
+                    UpdateHorizontalSB_Default(hwnd, dm);
+                    SetRelativeParam(hwnd, &(dm->scrollBars.horizontal), SB_HORZ);
+                }
+            }
+        }
+
+        // update
+        --dm->documentArea.lines;
+
+        switch (dm->mode) {
+        case FORMAT_MODE_DEFAULT:
+            UpdateVerticalSB_Default(hwnd, dm);
+            SetRelativeParam(hwnd, &(dm->scrollBars.vertical), SB_VERT);
+            break;
+
+        case FORMAT_MODE_WRAP:
+            dm->scrollBars.vertical.pos = BuildWrapModel(hwnd, dm);
+            UpdateVerticalSB_Wrap(hwnd, dm);
+            SetRelativeParam(hwnd, &(dm->scrollBars.vertical), SB_VERT);
+            break;
+        
+        default:
+            break;
+        }
     }
 #endif
 

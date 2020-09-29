@@ -60,22 +60,51 @@ ADD_DATA(Fragment, FragmentData_t) {
     return 0;
 }
 
-INSERT_NODE(Fragment) {
+INSERT_NODES(Fragment) {
     assert(list && node);
+    size_t count = 0;
+    Fragment* lastNode = node;
+
+    // pass
+    while (lastNode->next) {
+        lastNode = lastNode->next;
+        ++count;
+    }
 
     if (node->prev) {
-        node->next = node->prev->next;
+        lastNode->next = node->prev->next;
         node->prev->next = node;
     } else {
-        node->next = list->nodes;
+        lastNode->next = list->nodes;
         list->nodes = node;
     }
 
-    if (node->next) {
-        node->next->prev = node;
+    if (lastNode->next) {
+        lastNode->next->prev = lastNode;
     } else {
-        list->last = node;
+        list->last = lastNode;
     }
 
-    ++list->len;
+    list->len += count;
+}
+
+DELETE_NODE(Fragment) {
+    assert(list && node);
+    assert(list->len);
+
+    if (node->prev) {
+        node->prev->next = node->next;
+    } else {
+        list->nodes = node->next;
+    }
+
+    if (node->next) {
+        node->next->prev = node->prev;
+    } else {
+        list->last = node->prev;
+    }
+
+    DestroyFragment(&node);
+
+    --list->len;
 }
