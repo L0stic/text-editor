@@ -9,7 +9,10 @@ void CaretShow(HWND hwnd, int* p_isHidden) {
     assert(p_isHidden);
     assert(*p_isHidden);
 
-    printf("Show\n");
+    #ifndef DEBUG // ===== /
+        printf("Show\n");
+    #endif // ============ /
+
     ShowCaret(hwnd);
     *p_isHidden = 0;
 }
@@ -18,7 +21,10 @@ void CaretHide(HWND hwnd, int* p_isHidden) {
     assert(p_isHidden);
     assert(!*p_isHidden);
 
-    printf("Hide\n");
+     #ifndef DEBUG // ===== /
+        printf("Hide\n");
+    #endif // ============ /
+
     HideCaret(hwnd);
     *p_isHidden = 1;
 }

@@ -1,6 +1,7 @@
 #include "ScrollBar.h"
 
-/*  CAMERA_MODE params:
+/**  
+*   CAMERA_MODE params:
 *     * ONE_LINE    - expanded area (you can highlight one character);
 *     * MANY_LINES  - text fills all the free space.
 */

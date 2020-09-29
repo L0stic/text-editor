@@ -16,6 +16,15 @@ typedef enum {
     ERR_UNKNOWN
 } ErrorType;
 
-void PrintError(FILE* output, ErrorType errorType, char const* filename, int line);
+/**
+ * Prints a description of a error to output stream.
+ * 
+ * IN:
+ * @param output - pointer to a stream. If it's NULL, then the description is printed to the stderr
+ * @param errorType - pointer to a file name
+ * @param filename - pointer to a file name
+ * @param line - pointer to a file name
+ */
+void PrintError(FILE* output, ErrorType errorType, const char* filename, int line);
 
 #endif // ERROR_H_INCLUDED

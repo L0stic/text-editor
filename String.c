@@ -42,12 +42,17 @@ static int SetString(String* str, const char* src) {
 
         strncpy(str->data, src, str->len);
     }
-    return str->len;
+    return 0;
 }
 
 String* CreateString(const char* src) {
     String* str = calloc(1, sizeof(String));
-    if (str && src) { SetString(str, src); }
+    if (str && src) { 
+        if (SetString(str, src)) {
+            free(str);
+            return NULL;
+        }
+    }
     return str;
 }
 
