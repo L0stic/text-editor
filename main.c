@@ -691,7 +691,7 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
         }
 
         #ifdef CARET_ON
-            CaretPrintParams(&dm);
+            // CaretPrintParams(&dm);
             CaretSetPos(&dm);
         #endif
         break;
@@ -781,12 +781,14 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
                 UpdateWindow(hwnd);
 
                 ShowCaret(hwnd);
+
+                // PrintDocumentParameters(NULL, doc);
                 break;
             }
         }
 
         #ifdef CARET_ON
-            CaretPrintParams(&dm);
+            // CaretPrintParams(&dm);
             CaretSetPos(&dm);
         #endif
         break;

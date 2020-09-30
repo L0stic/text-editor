@@ -1426,7 +1426,7 @@ static void UpdateVerticalSB_Wrap(HWND hwnd, DisplayedModel* dm) {
 #endif
 
 void SwitchMode(HWND hwnd, DisplayedModel* dm, FormatMode mode) {
-    printf("Switch mode\n");
+    // printf("Switch mode\n");
     assert(dm);
 
     #ifndef DEBUG // ====/
@@ -1435,7 +1435,7 @@ void SwitchMode(HWND hwnd, DisplayedModel* dm, FormatMode mode) {
 
     switch(mode) {
     case FORMAT_MODE_DEFAULT:
-        printf("Default mode is activated\n");
+        // printf("Default mode is activated\n");
         dm->mode = FORMAT_MODE_DEFAULT;
         ++dm->clientArea.chars;
 
