@@ -8,6 +8,7 @@
 #include "Error.h"
 
 #include "String.h"
+#include "Fragment.h"
 #include "Block.h"
 typedef struct Document_tag {
     char* title;                // pointer to a title of file
@@ -36,9 +37,9 @@ Document* CreateDocument(char const* filename);
 void DestroyDocument(Document** ppDoc);
 
 /**
- * Sets a file in document object.
+ * Sets a file in Document object.
  * IN:
- * @param doc - pointer to a document object
+ * @param doc - pointer to a Document object
  * @param filename - pointer to a file name. if file is not exist, then put NULL.
  * 
  * OUT:
@@ -50,7 +51,7 @@ int SetFile(Document* doc, char const* filename);
  * Gets max length of a block in text.
  * IN:
  * @param blocks - pointer to blocks
- *
+ * 
  * OUT:
  * @return maxLen - max length of a block
  */
@@ -62,7 +63,6 @@ size_t GetMaxBlockLen(ListBlock const* blocks);
      * IN:
      * @param output - pointer to a stream
      * @param doc - pointer to a document object
-     * 
      */
     size_t PrintDocument(FILE* output, Document const* doc);
 
@@ -71,7 +71,6 @@ size_t GetMaxBlockLen(ListBlock const* blocks);
      * IN:
      * @param output - pointer to a stream
      * @param doc - pointer to a document object
-     * 
      */
     void PrintDocumentParameters(FILE* output, Document const* doc);
 // =============================================================

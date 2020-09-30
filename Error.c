@@ -12,7 +12,7 @@ static char* errorMessages[ERR_UNKNOWN + 1] = {
     "unknown error"
 };
 
-void PrintError(FILE* output, ErrorType errorType, char const* filename, int line) {
+void PrintError(FILE* output, ErrorType errorType, const char* filename, int line) {
     if (!output) { output = stderr; }
     if (!filename) {
         fprintf(output, "ERROR: %s\n", errorMessages[errorType]);

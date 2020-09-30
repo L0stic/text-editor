@@ -42,13 +42,17 @@ static int SetString(String* str, const char* src) {
 
         strncpy(str->data, src, str->len);
     }
-    return str->len;
+    return 0;
 }
 
-// обработать ошибки
 String* CreateString(const char* src) {
     String* str = calloc(1, sizeof(String));
-    if (str && src) { SetString(str, src); }
+    if (str && src) { 
+        if (SetString(str, src)) {
+            free(str);
+            return NULL;
+        }
+    }
     return str;
 }
 
@@ -78,6 +82,26 @@ int AddString(String* str, const char* src) {
     }
 
     return SetString(str, src);
+}
+
+int AddChar(String* str, char c) {
+    assert(str);
+
+    if (str->data) {
+        ++str->len;
+        if (str->len > str->size && ResizeString(str)) { return -1; }
+
+        str->data[str->len - 1] = c;
+        str->data[str->len] = '\0';    
+        return str->len;
+    }
+
+    char tmp[2];
+
+    tmp[0] = c;
+    tmp[1] = '\0';
+
+    return SetString(str, tmp);
 }
 
 size_t PrintString(FILE* output, const String* str) {

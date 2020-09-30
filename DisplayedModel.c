@@ -4,7 +4,7 @@
 // DISPLAY_STEP
 #define STEP 1
 
-static void InitModelPos(ModelPos* pMP, Block const* block) {
+static void InitModelPos(ModelPos* pMP, Block* block) {
     assert(pMP);
 
     pMP->block = block;
@@ -12,7 +12,7 @@ static void InitModelPos(ModelPos* pMP, Block const* block) {
     pMP->pos.y = 0;
 }
 
-void InitDisplayedModel(DisplayedModel* dm, TEXTMETRIC const* tm) {
+void InitDisplayedModel(DisplayedModel* dm, const TEXTMETRIC* tm) {
     assert(dm);
     assert(tm);
 
@@ -44,7 +44,6 @@ void InitDisplayedModel(DisplayedModel* dm, TEXTMETRIC const* tm) {
     #endif
 }
 
-
 static void PassPrev(ModelPos* modelPos, size_t delta) {
     assert(modelPos);
 
@@ -65,14 +64,15 @@ static void PassNext(ModelPos* modelPos, size_t delta) {
     }
 }
 
-
-static void PrintWrapModel(WrapModel* wrapModel) {
-    if (wrapModel->isValid) {
-        printf("Wrap model: %u\n", wrapModel->lines);
-    } else {
-        printf("Wrap model is not valid\n");
+#ifndef DEBUG // ======================================= /
+    static void PrintWrapModel(const WrapModel* wrapModel) {
+        if (wrapModel->isValid) {
+            printf("Wrap model: %u\n", wrapModel->lines);
+        } else {
+            printf("Wrap model is not valid\n");
+        }
     }
-}
+#endif // ============================================== /
 
 static void CountLines(Block* startBlock, const Block* lastBlock, DisplayedModel* dm) {
     assert(startBlock && dm);
@@ -88,8 +88,10 @@ static void CountLines(Block* startBlock, const Block* lastBlock, DisplayedModel
 }
 
 static size_t BuildWrapModel(HWND hwnd, DisplayedModel* dm) {
-    printf("BuildWrapModel\n");
     assert(dm);
+    #ifndef DEBUG // ================================/
+        // printf("BuildWrapModel\n");
+    #endif
 
     size_t absolutePos;
     Block* block = dm->doc->blocks->nodes;
@@ -139,23 +141,25 @@ static size_t BuildWrapModel(HWND hwnd, DisplayedModel* dm) {
     CountLines(block, NULL, dm);
     block = NULL;
 
-    dm->wrapModel.isValid = 1;
+    dm->wrapModel.isValid = 1; // TODO: delete
     return absolutePos;
 }
 
-static void PrintSBs(DisplayedModel const* dm) {
-    assert(dm);
+#ifndef DEBUG // ======================================= /
+    static void PrintSBs(const DisplayedModel* dm) {
+        assert(dm);
 
-    printf("\tHorizontal\n");
-    PrintScrollBar(&(dm->scrollBars.horizontal));
-    printf("\tVertical\n");
-    PrintScrollBar(&(dm->scrollBars.vertical));
-    putchar('\n');
-}
+        printf("\tHorizontal\n");
+        PrintScrollBar(&(dm->scrollBars.horizontal));
+        printf("\tVertical\n");
+        PrintScrollBar(&(dm->scrollBars.vertical));
+        putchar('\n');
+    }
+#endif // ============================================== /
 
 void CoverDocument(HWND hwnd, DisplayedModel* dm, Document* doc) {
     #ifndef DEBUG // ================================/
-        printf("Cover document\n");
+        // printf("Cover document\n");
     #endif // =======================================/
     assert(dm && doc);
 
@@ -163,7 +167,7 @@ void CoverDocument(HWND hwnd, DisplayedModel* dm, Document* doc) {
     dm->documentArea.lines = doc->blocks->len;
     dm->documentArea.chars = GetMaxBlockLen(doc->blocks);
 
-    dm->wrapModel.isValid = 0;
+    dm->wrapModel.isValid = 0; // TODO: delete
 
     InitScrollBar(&(dm->scrollBars.horizontal));
     InitScrollBar(&(dm->scrollBars.vertical));
@@ -206,18 +210,57 @@ void CoverDocument(HWND hwnd, DisplayedModel* dm, Document* doc) {
     #endif // =======================================/
 }
 
-static void PrintPos(DisplayedModel* dm) {
-    assert(dm);
-    printf("blockPos = %u, ", dm->scrollBars.modelPos.pos.y);
-    printf("charPos = %u\n", dm->scrollBars.modelPos.pos.x);
+#ifndef DEBUG // ======================================= /
+    static void PrintPos(const DisplayedModel* dm) {
+        assert(dm);
+        printf("blockPos = %u, ", dm->scrollBars.modelPos.pos.y);
+        printf("charPos = %u\n", dm->scrollBars.modelPos.pos.x);
+    }
+#endif // ============================================== /
+
+static size_t PrintLine(size_t lineIndex, HDC hdc, const DisplayedModel* dm, Fragment** fragment, size_t displayedChars, size_t delta) {
+    assert(dm && fragment && *fragment);
+    assert(displayedChars);
+
+    size_t length = 0;
+
+    for (size_t j = 0; j < displayedChars; j += length) {
+        if ((*fragment)->data.len - delta <= displayedChars - j) {
+            length = (*fragment)->data.len - delta;
+
+            TextOut(hdc,
+                j * dm->charMetric.x,
+                lineIndex * dm->charMetric.y,
+                dm->doc->text->data + (*fragment)->data.pos + delta,
+                length);
+            
+            delta = 0;
+            *fragment = (*fragment)->next;
+        } else {
+            length = displayedChars - j;
+
+            TextOut(hdc,
+                j * dm->charMetric.x,
+                lineIndex * dm->charMetric.y,
+                dm->doc->text->data + (*fragment)->data.pos + delta,
+                length);
+            
+            delta += length;
+            break;
+        }
+    }
+
+    return delta;
 }
 
 void DisplayModel(HDC hdc, const DisplayedModel* dm) {
     assert(dm && dm->doc && dm->doc->text);
 
     Block* block = dm->scrollBars.modelPos.block;
+    Fragment* fragment;
     size_t displayedLines, displayedChars;
     size_t linesBlock, nextLine;
+    size_t delta;
 
     #ifndef DEBUG // ================================/
         // printf("Display model:\n");
@@ -235,14 +278,19 @@ void DisplayModel(HDC hdc, const DisplayedModel* dm) {
         // print
         for (size_t i = 0; i < displayedLines; ++i) {
             if (dm->scrollBars.horizontal.pos < block->data.len) {
+                fragment = block->data.fragments->nodes;
                 displayedChars = min(dm->clientArea.chars, block->data.len - dm->scrollBars.horizontal.pos);
-                TextOut(hdc,
-                        0,
-                        i * dm->charMetric.y,
-                        dm->doc->text->data + block->data.pos + dm->scrollBars.horizontal.pos,
-                        displayedChars);
-            }
+                
+                // pass
+                delta = dm->scrollBars.horizontal.pos;
+                while (delta > fragment->data.len) {
+                    delta -= fragment->data.len;
+                    fragment = fragment->next;
+                }
 
+                PrintLine(i, hdc, dm, &fragment, displayedChars, delta);
+            }
+            
             block = block->next;
         }
         break;
@@ -252,54 +300,51 @@ void DisplayModel(HDC hdc, const DisplayedModel* dm) {
         // nextLine = DIV_WITH_ROUND_UP(dm->scrollBars.modelPos.pos.x, dm->clientArea.chars);
 
         displayedLines = min(dm->clientArea.lines, dm->wrapModel.lines - dm->scrollBars.vertical.pos);
+        fragment = block->data.fragments->nodes;
 
-        block = dm->scrollBars.modelPos.block;
+        // pass
+        delta = nextLine * dm->clientArea.chars;
+        while (delta > fragment->data.len) {
+            delta -= fragment->data.len;
+            fragment = fragment->next;
+        }
 
         // print
-        for (size_t i = 0; i < displayedLines; nextLine = 0) {
-            if (block->data.len == 0) {
+        for (size_t i = 0; i < displayedLines; nextLine = 0,
+            block = block->next, fragment = block ? block->data.fragments->nodes : NULL) {
+
+            // empty line
+            if (!block->data.len) {
                 ++i;
                 continue;
             }
 
             linesBlock = DIV_WITH_ROUND_UP(block->data.len, dm->clientArea.chars);
+            displayedChars = dm->clientArea.chars;
 
             if (linesBlock - nextLine <= displayedLines - i) {
+
                 for (; nextLine < linesBlock - 1; ++i, ++nextLine) {
-                    TextOut(hdc,
-                            0,
-                            i * dm->charMetric.y,
-                            dm->doc->text->data + block->data.pos + nextLine * dm->clientArea.chars,
-                            dm->clientArea.chars);
+                    delta = PrintLine(i, hdc, dm, &fragment, displayedChars, delta);
                 }
 
-                TextOut(hdc,
-                        0,
-                        i * dm->charMetric.y,
-                        dm->doc->text->data + block->data.pos + nextLine * dm->clientArea.chars,
-                        (block->data.len % dm->clientArea.chars) ? (block->data.len % dm->clientArea.chars) : dm->clientArea.chars);
+                displayedChars = (block->data.len % dm->clientArea.chars) ? (block->data.len % dm->clientArea.chars) : dm->clientArea.chars;
+                delta = PrintLine(i, hdc, dm, &fragment, displayedChars, delta);
+                
                 ++i;
             } else {
-                for (int delta = displayedLines - i; delta > 0; --delta) {
-                    TextOut(hdc,
-                            0,
-                            i * dm->charMetric.y,
-                            dm->doc->text->data + block->data.pos + nextLine * dm->clientArea.chars,
-                            dm->clientArea.chars);
-                    ++i;
-                    ++nextLine;
+                for (; i < displayedLines; ++i, ++nextLine) {
+                    delta = PrintLine(i, hdc, dm, &fragment, displayedChars, delta);
                 }
             }
-
-            block = block->next;
         }
         break;
 
     default:
+        PrintError(NULL, ERR_PARAM, __FILE__, __LINE__);
         return;
     }
 }
-
 
 static void UpdateScrollPos_Back(DisplayedModel* dm, size_t count) {
     assert(dm);
@@ -335,6 +380,7 @@ static void UpdateScrollPos_Back(DisplayedModel* dm, size_t count) {
         break;
 
     default:
+        PrintError(NULL, ERR_PARAM, __FILE__, __LINE__);
         break;
     }
 }
@@ -390,6 +436,7 @@ static void UpdateScrollPos_Forward(DisplayedModel* dm, size_t count) {
         break;
 
     default:
+        PrintError(NULL, ERR_PARAM, __FILE__, __LINE__);
         break;
     }
 }
@@ -494,6 +541,100 @@ size_t Scroll(HWND hwnd, DisplayedModel* dm, size_t count, Direction direction, 
     #endif // =====================================================/
 
     return count;
+}
+
+static void UpdateHorizontalSB_Default(HWND hwnd, DisplayedModel* dm) {
+    assert(dm);
+
+    dm->scrollBars.horizontal.maxPos = GetAbsoluteMaxPos(dm->documentArea.chars, dm->clientArea.chars);
+
+    if (dm->scrollBars.horizontal.pos > dm->scrollBars.horizontal.maxPos) {
+        #ifdef CARET_ON
+            size_t scrollValue = dm->scrollBars.horizontal.pos - dm->scrollBars.horizontal.maxPos;
+        #endif
+
+        dm->scrollBars.horizontal.pos = dm->scrollBars.horizontal.maxPos;
+
+    #ifdef CARET_ON
+            // left border
+            CaretHandleTopLeftBorder(hwnd, &(dm->caret.isHidden.x), scrollValue,
+                                dm->caret.modelPos.pos.x, dm->scrollBars.horizontal.pos,
+                                &(dm->caret.clientPos.x), DECREMENT_OF(dm->clientArea.chars));
+        } else {
+            // right border
+            CaretHandleBottomRightBorder(hwnd, &(dm->caret.isHidden.x), 0,
+                                dm->caret.modelPos.pos.x, dm->scrollBars.horizontal.pos,
+                                &(dm->caret.clientPos.x), DECREMENT_OF(dm->clientArea.chars));
+    #endif
+    }
+}
+
+static void UpdateVerticalSB_Default(HWND hwnd, DisplayedModel* dm) {
+    assert(dm);
+
+    dm->scrollBars.vertical.maxPos = GetAbsoluteMaxPos(dm->documentArea.lines, dm->clientArea.lines);
+
+    if (dm->scrollBars.vertical.pos > dm->scrollBars.vertical.maxPos) {
+        size_t scrollValue = dm->scrollBars.vertical.pos - dm->scrollBars.vertical.maxPos;
+
+        // pass
+        PassPrev(&(dm->scrollBars.modelPos), scrollValue);
+        dm->scrollBars.vertical.pos = dm->scrollBars.vertical.maxPos;
+
+    #ifdef CARET_ON
+            // top
+            CaretHandleTopLeftBorder(hwnd, &(dm->caret.isHidden.y), scrollValue,
+                                dm->caret.modelPos.pos.y, dm->scrollBars.vertical.pos,
+                                &(dm->caret.clientPos.y), DECREMENT_OF(dm->clientArea.lines));
+        } else {
+            // bottom
+            CaretHandleBottomRightBorder(hwnd, &(dm->caret.isHidden.y), 0,
+                                dm->caret.modelPos.pos.y, dm->scrollBars.vertical.pos,
+                                &(dm->caret.clientPos.y), DECREMENT_OF(dm->clientArea.lines));
+    #endif
+    }
+}
+
+static void UpdateVerticalSB_Wrap(HWND hwnd, DisplayedModel* dm) {
+    assert(dm);
+
+    dm->scrollBars.vertical.maxPos = GetAbsoluteMaxPos(dm->wrapModel.lines, dm->clientArea.lines);
+
+    if (dm->scrollBars.vertical.pos > dm->scrollBars.vertical.maxPos) {
+        size_t scrollValue = dm->scrollBars.vertical.pos - dm->scrollBars.vertical.maxPos;
+
+        // pass
+        for (size_t delta = dm->scrollBars.vertical.pos - dm->scrollBars.vertical.maxPos; delta > 0;) {
+            if (dm->scrollBars.modelPos.pos.x + 1 <= delta) {
+                delta -= dm->scrollBars.modelPos.pos.x + 1;
+            } else {
+                dm->scrollBars.modelPos.pos.x -= delta;
+                break;
+            }
+
+            // prev block
+            dm->scrollBars.modelPos.block = dm->scrollBars.modelPos.block->prev;
+            --dm->scrollBars.modelPos.pos.y;
+            if (dm->scrollBars.modelPos.block->data.len > 0) {
+                dm->scrollBars.modelPos.pos.x = DIV_WITH_ROUND_UP(dm->scrollBars.modelPos.block->data.len, dm->clientArea.chars) - 1;
+            } else {
+                dm->scrollBars.modelPos.pos.x = 0;
+            }
+        }
+        dm->scrollBars.vertical.pos = dm->scrollBars.vertical.maxPos;
+
+    #ifdef CARET_ON
+            // top
+            CaretHandleTopLeftBorder(hwnd, &(dm->caret.isHidden.y), scrollValue,
+                                dm->caret.linePos, dm->scrollBars.vertical.pos,
+                                &(dm->caret.clientPos.y), DECREMENT_OF(dm->clientArea.lines));
+        } else {
+            // bottom
+            CaretHandleBottomRightBorder(hwnd, &(dm->caret.isHidden.y), 0,
+                                dm->caret.linePos, dm->scrollBars.vertical.pos,
+                                &(dm->caret.clientPos.y), DECREMENT_OF(dm->clientArea.lines));
+    #endif
+    }
 }
 
 // Caret
@@ -756,11 +897,30 @@ size_t Scroll(HWND hwnd, DisplayedModel* dm, size_t count, Direction direction, 
     void CaretPageDown(HWND hwnd, DisplayedModel* dm, RECT* rectangle) {
         assert(dm && rectangle);
 
-        size_t delta = min(DECREMENT_OF(dm->clientArea.lines - 1),
-                            dm->scrollBars.vertical.maxPos - dm->scrollBars.vertical.pos);
-        printf("%u\n", delta);
+        size_t delta;
+        size_t linePos = dm->caret.modelPos.pos.y;
 
-        if (dm->caret.modelPos.pos.y - dm->caret.clientPos.y + delta <= dm->scrollBars.vertical.maxPos) {
+        switch(dm->mode) {
+        case FORMAT_MODE_DEFAULT:
+            linePos = dm->caret.modelPos.pos.y;
+            break;
+
+        case FORMAT_MODE_WRAP:
+            linePos = dm->caret.linePos;
+            break;
+
+        default:
+            return;
+        }
+
+        if (dm->clientArea.lines == 1) {
+            delta = 1;
+        } else {
+            delta = min(DECREMENT_OF(dm->clientArea.lines - 1),
+                            dm->scrollBars.vertical.maxPos - dm->scrollBars.vertical.pos);
+        }
+
+        if (linePos - dm->caret.clientPos.y + delta <= dm->scrollBars.vertical.maxPos) {
             PassNext(&(dm->caret.modelPos), delta);
             Scroll(hwnd, dm, delta, DOWN, rectangle);
         }
@@ -782,7 +942,7 @@ size_t Scroll(HWND hwnd, DisplayedModel* dm, size_t count, Direction direction, 
         ShowCaret(hwnd);
     }
 
-    void CaretTopLeftBorder(HWND hwnd, int* p_isHidden, size_t scrollValue, size_t modelPos, size_t scrollBarPos, size_t* pClientPos, size_t clientPosMax) {
+    void CaretHandleTopLeftBorder(HWND hwnd, int* p_isHidden, size_t scrollValue, size_t modelPos, size_t scrollBarPos, size_t* pClientPos, size_t clientPosMax) {
         assert(p_isHidden && pClientPos);
 
         // caret is over the top/left border
@@ -805,7 +965,7 @@ size_t Scroll(HWND hwnd, DisplayedModel* dm, size_t count, Direction direction, 
         }
     }
 
-    void CaretBottomRightBorder(HWND hwnd, int* p_isHidden, size_t scrollValue, size_t modelPos, size_t scrollBarPos, size_t* pClientPos, size_t clientPosMax) {
+    void CaretHandleBottomRightBorder(HWND hwnd, int* p_isHidden, size_t scrollValue, size_t modelPos, size_t scrollBarPos, size_t* pClientPos, size_t clientPosMax) {
         assert(p_isHidden && pClientPos);
 
         if (*p_isHidden && *pClientPos != 0) {
@@ -844,7 +1004,7 @@ size_t Scroll(HWND hwnd, DisplayedModel* dm, size_t count, Direction direction, 
             if (dm->caret.modelPos.pos.x < dm->scrollBars.horizontal.pos) {
                 scrollValue = dm->scrollBars.horizontal.pos - dm->caret.modelPos.pos.x;
                 scrollValue = Scroll(hwnd, dm, scrollValue, LEFT, rectangle);
-                CaretTopLeftBorder(hwnd, &(dm->caret.isHidden.x), scrollValue,
+                CaretHandleTopLeftBorder(hwnd, &(dm->caret.isHidden.x), scrollValue,
                                             dm->caret.modelPos.pos.x, dm->scrollBars.horizontal.pos,
                                             &(dm->caret.clientPos.x), DECREMENT_OF(dm->clientArea.chars));
             }
@@ -853,7 +1013,7 @@ size_t Scroll(HWND hwnd, DisplayedModel* dm, size_t count, Direction direction, 
             if (dm->caret.modelPos.pos.x > dm->scrollBars.horizontal.pos + DECREMENT_OF(dm->clientArea.chars)) {
                 scrollValue = dm->caret.modelPos.pos.x - (dm->scrollBars.horizontal.pos + DECREMENT_OF(dm->clientArea.chars));
                 scrollValue = Scroll(hwnd, dm, scrollValue, RIGHT, rectangle);
-                CaretBottomRightBorder(hwnd, &(dm->caret.isHidden.x), scrollValue,
+                CaretHandleBottomRightBorder(hwnd, &(dm->caret.isHidden.x), scrollValue,
                                             dm->caret.modelPos.pos.x, dm->scrollBars.horizontal.pos,
                                             &(dm->caret.clientPos.x), DECREMENT_OF(dm->clientArea.chars));
             }
@@ -879,7 +1039,7 @@ size_t Scroll(HWND hwnd, DisplayedModel* dm, size_t count, Direction direction, 
             if (numLines < dm->scrollBars.vertical.pos) {
                 scrollValue = dm->scrollBars.vertical.pos - numLines;
                 scrollValue = Scroll(hwnd, dm, scrollValue, UP, rectangle);
-                CaretTopLeftBorder(hwnd, &(dm->caret.isHidden.y), scrollValue,
+                CaretHandleTopLeftBorder(hwnd, &(dm->caret.isHidden.y), scrollValue,
                                             numLines, dm->scrollBars.vertical.pos,
                                             &(dm->caret.clientPos.y), DECREMENT_OF(dm->clientArea.lines - 1));
             }
@@ -888,7 +1048,7 @@ size_t Scroll(HWND hwnd, DisplayedModel* dm, size_t count, Direction direction, 
             if (numLines > dm->scrollBars.vertical.pos + DECREMENT_OF(dm->clientArea.lines - 1)) {
                 scrollValue = numLines - (dm->scrollBars.vertical.pos + DECREMENT_OF(dm->clientArea.lines - 1));
                 scrollValue = Scroll(hwnd, dm, scrollValue, DOWN, rectangle);
-                CaretBottomRightBorder(hwnd, &(dm->caret.isHidden.y), scrollValue,
+                CaretHandleBottomRightBorder(hwnd, &(dm->caret.isHidden.y), scrollValue,
                                             numLines, dm->scrollBars.vertical.pos,
                                             &(dm->caret.clientPos.y), DECREMENT_OF(dm->clientArea.lines - 1));
             }
@@ -900,104 +1060,373 @@ size_t Scroll(HWND hwnd, DisplayedModel* dm, size_t count, Direction direction, 
         }
     }
 
-#endif
 
-static void UpdateHorizontalSB_Default(HWND hwnd, DisplayedModel* dm) {
-    assert(dm);
+    static int SplitFragment(ListFragment* fragments, Fragment* prevFragment, size_t delta) {
+        FragmentData_t fragmentData = { prevFragment->data.len - delta, prevFragment->data.pos + delta };
+        Fragment* newFragment = CreateFragment(prevFragment, &fragmentData);
 
-    dm->scrollBars.horizontal.maxPos = GetAbsoluteMaxPos(dm->documentArea.chars, dm->clientArea.chars);
+        if (!newFragment) { return ERR_NOMEM; }
 
-    if (dm->scrollBars.horizontal.pos > dm->scrollBars.horizontal.maxPos) {
-        #ifdef CARET_ON
-            size_t scrollValue = dm->scrollBars.horizontal.pos - dm->scrollBars.horizontal.maxPos;
-        #endif
+        InsertFragments(fragments, newFragment);
+        prevFragment->data.len = delta;
 
-        dm->scrollBars.horizontal.pos = dm->scrollBars.horizontal.maxPos;
-
-    #ifdef CARET_ON
-            // left border
-            CaretTopLeftBorder(hwnd, &(dm->caret.isHidden.x), scrollValue,
-                                dm->caret.modelPos.pos.x, dm->scrollBars.horizontal.pos,
-                                &(dm->caret.clientPos.x), DECREMENT_OF(dm->clientArea.chars));
-        } else {
-            // right border
-            CaretBottomRightBorder(hwnd, &(dm->caret.isHidden.x), 0,
-                                dm->caret.modelPos.pos.x, dm->scrollBars.horizontal.pos,
-                                &(dm->caret.clientPos.x), DECREMENT_OF(dm->clientArea.chars));
-    #endif
+        return ERR_SUCCESS;
     }
-}
 
-static void UpdateVerticalSB_Default(HWND hwnd, DisplayedModel* dm) {
-    assert(dm);
+    int CaretAddChar(HWND hwnd, DisplayedModel* dm, char c) {
+        assert(dm);
+        
+        ListFragment* fragments = dm->caret.modelPos.block->data.fragments;
+        Fragment* fragment = fragments->nodes;
+        Fragment* newFragment = NULL;
+        FragmentData_t fragmentData = {1, dm->doc->text->len};
 
-    dm->scrollBars.vertical.maxPos = GetAbsoluteMaxPos(dm->documentArea.lines, dm->clientArea.lines);
 
-    if (dm->scrollBars.vertical.pos > dm->scrollBars.vertical.maxPos) {
-        size_t scrollValue = dm->scrollBars.vertical.pos - dm->scrollBars.vertical.maxPos;
+        if (AddChar(dm->doc->text, c) < 0) {
+            PrintError(NULL, ERR_NOMEM, __FILE__, __LINE__);
+            return ERR_NOMEM;
+        }
 
-        // pass
-        PassPrev(&(dm->scrollBars.modelPos), scrollValue);
-        dm->scrollBars.vertical.pos = dm->scrollBars.vertical.maxPos;
+        // find place
+        size_t delta = dm->caret.modelPos.pos.x;
+        while (delta > fragment->data.len) {
+            delta -= fragment->data.len;
+            fragment = fragment->next;
+        }
 
-    #ifdef CARET_ON
-            // top
-            CaretTopLeftBorder(hwnd, &(dm->caret.isHidden.y), scrollValue,
-                                dm->caret.modelPos.pos.y, dm->scrollBars.vertical.pos,
-                                &(dm->caret.clientPos.y), DECREMENT_OF(dm->clientArea.lines));
-        } else {
-            // bottom
-            CaretBottomRightBorder(hwnd, &(dm->caret.isHidden.y), 0,
-                                dm->caret.modelPos.pos.y, dm->scrollBars.vertical.pos,
-                                &(dm->caret.clientPos.y), DECREMENT_OF(dm->clientArea.lines));
-    #endif
-    }
-}
+        // split
+        if (delta && delta < fragment->data.len) {
+            if (SplitFragment(fragments, fragment, delta)) {
+                --dm->doc->text->len;
+                dm->doc->text->data[dm->doc->text->len] = '\0';
 
-static void UpdateVerticalSB_Wrap(HWND hwnd, DisplayedModel* dm) {
-    assert(dm);
-
-    dm->scrollBars.vertical.maxPos = GetAbsoluteMaxPos(dm->wrapModel.lines, dm->clientArea.lines);
-
-    if (dm->scrollBars.vertical.pos > dm->scrollBars.vertical.maxPos) {
-        size_t scrollValue = dm->scrollBars.vertical.pos - dm->scrollBars.vertical.maxPos;
-
-        // pass
-        for (size_t delta = dm->scrollBars.vertical.pos - dm->scrollBars.vertical.maxPos; delta > 0;) {
-            if (dm->scrollBars.modelPos.pos.x + 1 <= delta) {
-                delta -= dm->scrollBars.modelPos.pos.x + 1;
-            } else {
-                dm->scrollBars.modelPos.pos.x -= delta;
-                break;
-            }
-
-            // prev block
-            dm->scrollBars.modelPos.block = dm->scrollBars.modelPos.block->prev;
-            --dm->scrollBars.modelPos.pos.y;
-            if (dm->scrollBars.modelPos.block->data.len > 0) {
-                dm->scrollBars.modelPos.pos.x = DIV_WITH_ROUND_UP(dm->scrollBars.modelPos.block->data.len, dm->clientArea.chars) - 1;
-            } else {
-                dm->scrollBars.modelPos.pos.x = 0;
+                PrintError(NULL, ERR_NOMEM, __FILE__, __LINE__);
+                return ERR_NOMEM;
             }
         }
-        dm->scrollBars.vertical.pos = dm->scrollBars.vertical.maxPos;
 
-    #ifdef CARET_ON
-            // top
-            CaretTopLeftBorder(hwnd, &(dm->caret.isHidden.y), scrollValue,
-                                dm->caret.linePos, dm->scrollBars.vertical.pos,
-                                &(dm->caret.clientPos.y), DECREMENT_OF(dm->clientArea.lines));
+        // insert
+        if (!fragment->data.len) {
+            ++fragment->data.len;
+            fragment->data.pos = dm->doc->text->len - 1;
         } else {
-            // bottom
-            CaretBottomRightBorder(hwnd, &(dm->caret.isHidden.y), 0,
-                                dm->caret.linePos, dm->scrollBars.vertical.pos,
-                                &(dm->caret.clientPos.y), DECREMENT_OF(dm->clientArea.lines));
-    #endif
+            if (!delta) {
+                newFragment = CreateFragment(NULL, &fragmentData);
+
+                if (!newFragment) {
+                    --dm->doc->text->len;
+                    dm->doc->text->data[dm->doc->text->len] = '\0';
+
+                    PrintError(NULL, ERR_NOMEM, __FILE__, __LINE__);
+                    return ERR_NOMEM;
+                }
+            } else if (delta == fragment->data.len) {
+                if (dm->doc->text->len == fragment->data.pos + fragment->data.len) {
+                    ++fragment->data.len;
+                } else {
+                    newFragment = CreateFragment(fragment, &fragmentData);
+
+                    if (!newFragment) {
+                        --dm->doc->text->len;
+                        dm->doc->text->data[dm->doc->text->len] = '\0';
+
+                        PrintError(NULL, ERR_NOMEM, __FILE__, __LINE__);
+                        return ERR_NOMEM;
+                    }
+                }
+            }
+
+            InsertFragments(fragments, newFragment);
+        }
+
+        // update
+        ++dm->caret.modelPos.block->data.len;
+
+        if (dm->documentArea.chars < dm->caret.modelPos.block->data.len) {
+            dm->documentArea.chars = dm->caret.modelPos.block->data.len;
+
+            if (dm->mode == FORMAT_MODE_DEFAULT) {
+                UpdateHorizontalSB_Default(hwnd, dm);
+                SetRelativeParam(hwnd, &(dm->scrollBars.horizontal), SB_HORZ);
+            }
+        }
+
+        if (dm->mode == FORMAT_MODE_WRAP) {
+            size_t linesBlock = 1;
+
+            if (dm->caret.modelPos.block->data.len != 1) {
+                linesBlock = DIV_WITH_ROUND_UP(dm->caret.modelPos.block->data.len - 1, dm->clientArea.chars);
+            }
+
+            if (linesBlock < DIV_WITH_ROUND_UP(dm->caret.modelPos.block->data.len, dm->clientArea.chars)) {
+                ++dm->wrapModel.lines;
+                UpdateVerticalSB_Wrap(hwnd, dm);
+                SetRelativeParam(hwnd, &(dm->scrollBars.vertical), SB_VERT);
+            }
+        }
+
+        return ERR_SUCCESS;
     }
-}
+
+    int CaretAddBlock(HWND hwnd, DisplayedModel* dm) {
+        assert(dm);
+        int isSplitted = 0;
+        int isChangeLen;
+
+        // prepare
+        ListFragment* newFragments = CreateListFragment();
+        if (!newFragments) {
+            PrintError(NULL, ERR_NOMEM, __FILE__, __LINE__);
+            return ERR_NOMEM;
+        }
+
+        ListFragment* fragments = dm->caret.modelPos.block->data.fragments;
+        Fragment* fragment = fragments->nodes;
+        Fragment* newFragment;
+
+        // find place
+        size_t delta = dm->caret.modelPos.pos.x;
+        size_t counter = 0;
+        while (delta > fragment->data.len) {
+            delta -= fragment->data.len;
+            fragment = fragment->next;
+
+            ++counter;
+        }
+
+        if (delta && delta < fragment->data.len) {
+            // split
+            if (SplitFragment(dm->caret.modelPos.block->data.fragments, fragment, delta)) {
+                DestroyListFragment(&newFragments);
+                PrintError(NULL, ERR_NOMEM, __FILE__, __LINE__);
+                return ERR_NOMEM;
+            }
+
+            newFragment = fragment->next;
+            isSplitted = 1;
+        } else if (delta == fragment->data.len && fragment->next) {
+            newFragment = fragment->next;
+            isSplitted = 1;
+        } else {
+            FragmentData_t fragmentData = { 0, dm->doc->text->len };
+            newFragment = CreateFragment(NULL, &fragmentData);
+
+            if (!newFragment) {
+                DestroyListFragment(&newFragments);
+                PrintError(NULL, ERR_NOMEM, __FILE__, __LINE__);
+                return ERR_NOMEM;
+            }
+        }
+
+        // insert
+        Block* block = dm->caret.modelPos.block;
+        Block* newBlock;
+        BlockData_t blockData = { 0, newFragments };
+        isChangeLen = block->data.len == dm->documentArea.chars;
+
+        blockData.fragments = newFragments;
+        if (isSplitted) {
+            blockData.len = block->data.len - dm->caret.modelPos.pos.x;
+        } else if (!delta) {
+            block = block->prev;
+        }
+
+        newBlock = CreateBlock(block, &blockData);
+
+        if (!newBlock) {
+            DestroyListFragment(&newFragments);
+            if (!isSplitted) { DestroyFragment(&newFragment); }
+
+            PrintError(NULL, ERR_NOMEM, __FILE__, __LINE__);
+            return ERR_NOMEM;
+        }
+
+        if (isSplitted) {
+            newFragment->prev = NULL;
+            newFragments->len = fragments->len - counter;
+
+            fragment->next = NULL;
+            fragments->len = counter;
+
+            block->data.len = dm->caret.modelPos.pos.x;
+        } else if (!delta) {
+            if (dm->caret.modelPos.block == dm->scrollBars.modelPos.block) {
+                switch (dm->mode) {
+                case FORMAT_MODE_DEFAULT:
+                    dm->scrollBars.modelPos.block = newBlock;
+                    break;
+
+                case FORMAT_MODE_WRAP:
+                    if (dm->scrollBars.modelPos.pos.x == 1) {
+                        dm->scrollBars.modelPos.block = newBlock;
+                    }
+                    break;
+
+                default:
+                    break;
+                }
+            }
+            dm->caret.modelPos.block = newBlock;
+        }
+
+        InsertFragments(newFragments, newFragment);
+        InsertBlocks(dm->doc->blocks, newBlock);
+
+        // update
+        ++dm->documentArea.lines;
+
+        if (isChangeLen) {
+            dm->documentArea.chars = GetMaxBlockLen(dm->doc->blocks);
+
+            if (dm->mode == FORMAT_MODE_DEFAULT) {
+                UpdateHorizontalSB_Default(hwnd, dm);
+                SetRelativeParam(hwnd, &(dm->scrollBars.horizontal), SB_HORZ);
+            }
+        }
+
+        switch (dm->mode) {
+        case FORMAT_MODE_DEFAULT:
+            UpdateVerticalSB_Default(hwnd, dm);
+            SetRelativeParam(hwnd, &(dm->scrollBars.vertical), SB_VERT);
+            break;
+
+        case FORMAT_MODE_WRAP:
+            dm->scrollBars.vertical.pos = BuildWrapModel(hwnd, dm);
+            UpdateVerticalSB_Wrap(hwnd, dm);
+            SetRelativeParam(hwnd, &(dm->scrollBars.vertical), SB_VERT);
+            break;
+        
+        default:
+            break;
+        }
+
+        return ERR_SUCCESS;
+    }
+
+    int CaretDeleteChar(HWND hwnd, DisplayedModel* dm) {
+        assert(dm);
+        assert(dm->caret.modelPos.block->data.len);
+
+        ListFragment* fragments = dm->caret.modelPos.block->data.fragments;
+        Fragment* fragment = fragments->nodes;
+
+        // TODO: simplify text
+
+        // find place
+        size_t delta = dm->caret.modelPos.pos.x;
+        while (delta > fragment->data.len) {
+            delta -= fragment->data.len;
+            fragment = fragment->next;
+        }
+
+        // split
+        if (delta && delta < fragment->data.len) {
+            if (SplitFragment(fragments, fragment, delta)) {
+                PrintError(NULL, ERR_NOMEM, __FILE__, __LINE__);
+                return ERR_NOMEM;
+            }
+
+            fragment = fragment->next;
+        } else if (delta == fragment->data.len) {
+            fragment = fragment->next;
+        }
+
+        // delete
+        --fragment->data.len;
+        ++fragment->data.pos;
+
+        if (!fragment->data.len && fragments->len > 1) {
+            DeleteFragment(fragments, fragment);
+        }
+
+        // update
+        --dm->caret.modelPos.block->data.len;
+
+        if (dm->documentArea.chars == dm->caret.modelPos.block->data.len + 1) {
+            dm->documentArea.chars = GetMaxBlockLen(dm->doc->blocks);
+
+            if (dm->mode == FORMAT_MODE_DEFAULT) {
+                UpdateHorizontalSB_Default(hwnd, dm);
+                SetRelativeParam(hwnd, &(dm->scrollBars.horizontal), SB_HORZ);
+            }
+        }
+
+        if (dm->mode == FORMAT_MODE_WRAP && ((dm->caret.modelPos.block->data.len + 1) > dm->clientArea.chars)) {
+            size_t linesBlock = DIV_WITH_ROUND_UP(dm->caret.modelPos.block->data.len + 1, dm->clientArea.chars);
+
+            if (linesBlock > DIV_WITH_ROUND_UP(dm->caret.modelPos.block->data.len, dm->clientArea.chars)) {
+                --dm->wrapModel.lines;
+                UpdateVerticalSB_Wrap(hwnd, dm);
+                SetRelativeParam(hwnd, &(dm->scrollBars.vertical), SB_VERT);
+            }
+        }
+
+        return ERR_SUCCESS;
+    }
+
+    void CaretDeleteBlock(HWND hwnd, DisplayedModel* dm) {
+        assert(dm);
+        assert(dm->caret.modelPos.pos.x == dm->caret.modelPos.block->data.len);
+        assert(dm->caret.modelPos.block->next);
+
+        Block* block = dm->caret.modelPos.block;
+        Block* nextBlock = block->next;
+
+        ListFragment* fragments = block->data.fragments;
+
+        if (!block->data.len) {
+            if (dm->scrollBars.modelPos.block == block) {
+                dm->scrollBars.modelPos.block = nextBlock;
+            }
+            dm->caret.modelPos.block = nextBlock;
+
+            DeleteBlock(dm->doc->blocks, block);
+        } else if (!nextBlock->data.len) {
+            DeleteBlock(dm->doc->blocks, nextBlock);
+        } else {
+            ListFragment* fragments = block->data.fragments;
+            nextBlock->data.fragments->nodes->prev = fragments->last;
+            InsertFragments(fragments, nextBlock->data.fragments->nodes);
+
+            nextBlock->data.fragments = NULL;
+            block->data.len += nextBlock->data.len;
+
+            DeleteBlock(dm->doc->blocks, nextBlock);
+
+            // update horizontal params
+            if (block->data.len > dm->documentArea.chars) {
+                dm->documentArea.chars = GetMaxBlockLen(dm->doc->blocks);
+
+                if (dm->mode == FORMAT_MODE_DEFAULT) {
+                    UpdateHorizontalSB_Default(hwnd, dm);
+                    SetRelativeParam(hwnd, &(dm->scrollBars.horizontal), SB_HORZ);
+                }
+            }
+        }
+
+        // update
+        --dm->documentArea.lines;
+
+        switch (dm->mode) {
+        case FORMAT_MODE_DEFAULT:
+            UpdateVerticalSB_Default(hwnd, dm);
+            SetRelativeParam(hwnd, &(dm->scrollBars.vertical), SB_VERT);
+            break;
+
+        case FORMAT_MODE_WRAP:
+            dm->scrollBars.vertical.pos = BuildWrapModel(hwnd, dm);
+            UpdateVerticalSB_Wrap(hwnd, dm);
+            SetRelativeParam(hwnd, &(dm->scrollBars.vertical), SB_VERT);
+            break;
+        
+        default:
+            break;
+        }
+    }
+#endif
 
 void SwitchMode(HWND hwnd, DisplayedModel* dm, FormatMode mode) {
-    printf("Switch mode\n");
+    // printf("Switch mode\n");
     assert(dm);
 
     #ifndef DEBUG // ====/
@@ -1006,7 +1435,7 @@ void SwitchMode(HWND hwnd, DisplayedModel* dm, FormatMode mode) {
 
     switch(mode) {
     case FORMAT_MODE_DEFAULT:
-        printf("Default mode is activated\n");
+        // printf("Default mode is activated\n");
         dm->mode = FORMAT_MODE_DEFAULT;
         ++dm->clientArea.chars;
 
