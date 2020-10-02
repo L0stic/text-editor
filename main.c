@@ -697,6 +697,7 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
         break;
     // WM_KEYDOWN
 
+    #ifdef CARET_ON
     case WM_CHAR:
         FindCaret(hwnd, &dm, &rectangle);
         
@@ -793,6 +794,7 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
         #endif
         break;
     // WM_CHAR
+    #endif
 
     case WM_DESTROY:
         if (doc) { DestroyDocument(&doc); }
