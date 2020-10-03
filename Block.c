@@ -66,7 +66,7 @@ ADD_DATA(Block, BlockData_t) {
 
 INSERT_NODES(Block) {
     assert(list && node);
-    size_t count = 0;
+    size_t count = 1;
     Block* lastNode = node;
 
     // pass

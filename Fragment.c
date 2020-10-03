@@ -62,7 +62,7 @@ ADD_DATA(Fragment, FragmentData_t) {
 
 INSERT_NODES(Fragment) {
     assert(list && node);
-    size_t count = 0;
+    size_t count = 1;
     Fragment* lastNode = node;
 
     // pass

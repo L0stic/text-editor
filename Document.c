@@ -268,7 +268,7 @@ size_t PrintDocument(FILE* output, Document const* doc) {
 
 void PrintDocumentParameters(FILE* output, Document const* doc) {
     assert(doc);
-    const char* null = "NULL";
+    static const char* null = "NULL";
 
     if (!output) { output = stdout; }
 
@@ -286,6 +286,14 @@ void PrintDocumentParameters(FILE* output, Document const* doc) {
     fprintf(output, "\tBlocks: "); 
     if (doc->text) {
         fprintf(output, "len = %u\n", doc->blocks->len);
+
+        Block* block = doc->blocks->nodes;
+        for (size_t i = 0; i < doc->blocks->len; ++i) {
+            fprintf(output, "\t\tFragments (%u): ", i);
+            fprintf(output, "%u\n", block->data.fragments->len);
+
+            block = block->next;
+        }
     } else {
         fprintf(output, "%s\n", null);
     }
