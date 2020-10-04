@@ -700,6 +700,9 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
             switch(wParam) {
             case '\b' : // backspace
                 if(dm.caret.modelPos.pos.y || dm.caret.modelPos.pos.x) {
+                    if (dm.caret.modelPos.pos.x && !dm.caret.clientPos.x) {
+                        SendMessage(hwnd, WM_KEYDOWN, VK_LEFT, 1L);
+                    }
                     SendMessage(hwnd, WM_KEYDOWN, VK_LEFT, 1L);
                     SendMessage(hwnd, WM_KEYDOWN, VK_DELETE, 1L);
                 }

@@ -258,9 +258,7 @@ size_t Scroll(HWND hwnd, DisplayedModel* dm, size_t scrollValue, Direction dir, 
     /**
      * Moves the caret to the left (FORMAT_MODE_WRAP).
      * IN:
-     * @param hwnd - a handle to a window
      * @param dm - pointer to a DisplayModel object
-     * @param rectangle - pointer to rectangle (will be invalidate)
      */
     void CaretMoveToLeft_Wrap(DisplayedModel* dm);
 
@@ -277,9 +275,7 @@ size_t Scroll(HWND hwnd, DisplayedModel* dm, size_t scrollValue, Direction dir, 
     /**
      * Moves the caret to the right (FORMAT_MODE_WRAP).
      * IN:
-     * @param hwnd - a handle to a window
      * @param dm - pointer to a DisplayModel object
-     * @param rectangle - pointer to rectangle (will be invalidate)
      */
     void CaretMoveToRight_Wrap(DisplayedModel* dm);
 
