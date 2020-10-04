@@ -731,23 +731,26 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
                 printf("line feed\n");
                 break;
 
-            case '\r' : // carriage return
+            case '\r' : { // carriage return
+                int flag = 0;
+                
                 HideCaret(hwnd);
 
                 CaretAddBlock(hwnd, &dm);
 
                 printf("%u\n", DIV_WITH_ROUND_UP(dm.caret.modelPos.pos.x, dm.clientArea.chars));
 
-                // if (dm.mode == FORMAT_MODE_WRAP && dm.caret.modelPos.pos.x >= dm.clientArea.chars
-                //     && (!dm.caret.clientPos.x || dm.caret.clientPos.x == dm.clientArea.chars)) {
-                //     printf("Hello\n");
-                //     if (dm.caret.clientPos.x == dm.clientArea.chars) {
-                //         // CaretMoveToBottom_Wrap(hwnd, &dm, &rectangle);
-                //         // if (dm.caret.clientPos.x) { FindHome_Wrap(&dm); }
-                //     }
-                // } else {
-                    PostMessage(hwnd, WM_KEYDOWN, VK_RIGHT, (LPARAM)0);
-                // }
+                // TODO: fix this because it's not good
+                if (dm.mode == FORMAT_MODE_WRAP && dm.caret.modelPos.pos.x >= dm.clientArea.chars
+                    && (!dm.caret.clientPos.x || dm.caret.clientPos.x == dm.clientArea.chars)) {
+                    flag = 1;
+                }
+
+                PostMessage(hwnd, WM_KEYDOWN, VK_RIGHT, (LPARAM)0);
+
+                if (flag) {
+                    --dm.caret.clientPos.y;
+                }
 
                 InvalidateRect(hwnd, NULL, TRUE);
                 UpdateWindow(hwnd);
@@ -757,6 +760,7 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
                 #ifndef NDEBUG // ======================= /
                     PrintDocumentParameters(NULL, doc);
                 #endif // =============================== /
+            }
                 break;
 
             default : // character codes
