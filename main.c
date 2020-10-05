@@ -600,11 +600,25 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
 
         case VK_PRIOR:
             #ifdef CARET_ON
-                // if (dm.mode == FORMAT_MODE_WRAP) { break; }
+                if (dm.mode != FORMAT_MODE_DEFAULT) { break; }
 
-                // FindCaret(hwnd, &dm, &rectangle);
-                // CaretPageUp(hwnd, &dm, &rectangle);
-                // FindLeftEnd_Default(hwnd, &dm, &rectangle);
+                if (dm.scrollBars.vertical.pos > 0) {
+                    CaretPageUp(hwnd, &dm, &rectangle);
+
+                    switch (dm.mode) {
+                    case FORMAT_MODE_DEFAULT:
+                        if (dm.caret.modelPos.pos.x > dm.caret.modelPos.block->data.len) {
+                            FindLeftEnd_Default(hwnd, &dm, &rectangle);
+                        }
+                        break;
+
+                    case FORMAT_MODE_WRAP:
+                        FindLeftEnd_Wrap(&dm);
+                        break;
+                    default:
+                        break;
+                    }
+                }
             #else
                 PostMessage(hwnd, WM_VSCROLL, SB_PAGEUP, (LPARAM)0);
             #endif
@@ -612,11 +626,25 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
 
         case VK_NEXT:
             #ifdef CARET_ON
-                // if (dm.mode == FORMAT_MODE_WRAP) { break; }
+                if (dm.mode != FORMAT_MODE_DEFAULT) { break; }
 
-                // FindCaret(hwnd, &dm, &rectangle);
-                // CaretPageDown(hwnd, &dm, &rectangle);
-                // FindLeftEnd_Default(hwnd, &dm, &rectangle);
+                if (dm.scrollBars.vertical.maxPos - dm.scrollBars.vertical.pos > 0) {
+                    CaretPageDown(hwnd, &dm, &rectangle);
+
+                    switch (dm.mode) {
+                    case FORMAT_MODE_DEFAULT:
+                        if (dm.caret.modelPos.pos.x > dm.caret.modelPos.block->data.len) {
+                            FindLeftEnd_Default(hwnd, &dm, &rectangle);
+                        }
+                        break;
+
+                    case FORMAT_MODE_WRAP:
+                        FindLeftEnd_Wrap(&dm);
+                        break;
+                    default:
+                        break;
+                    }
+                }
             #else
                 PostMessage(hwnd, WM_VSCROLL, SB_PAGEDOWN, (LPARAM)0);
             #endif

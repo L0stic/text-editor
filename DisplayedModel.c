@@ -693,6 +693,16 @@ static void UpdateVerticalSB_Wrap(HWND hwnd, DisplayedModel* dm) {
         dm->caret.modelPos.pos.x = dm->caret.modelPos.block->data.len;
     }
 
+    void FindLeftEnd_Wrap(DisplayedModel* dm) {
+        assert(dm);
+        size_t deltaModel = dm->caret.modelPos.pos.x - dm->caret.modelPos.block->data.len;
+
+        if (dm->caret.modelPos.pos.x > dm->caret.modelPos.block->data.len) {
+            dm->caret.modelPos.pos.x = dm->caret.modelPos.block->data.len;
+            dm->caret.clientPos.x = dm->caret.modelPos.block->data.len % dm->clientArea.chars;
+        }
+    }
+
     void FindRightEnd_Default(HWND hwnd, DisplayedModel* dm, RECT* rectangle) {
         assert(dm && rectangle);
 
@@ -884,21 +894,9 @@ static void UpdateVerticalSB_Wrap(HWND hwnd, DisplayedModel* dm) {
 
     void CaretPageUp(HWND hwnd, DisplayedModel* dm, RECT* rectangle) {
         assert(dm && rectangle);
+        assert(dm->scrollBars.vertical.pos);
 
-        size_t delta = min(DECREMENT_OF(dm->clientArea.lines - 1), dm->scrollBars.vertical.pos);
-        printf("%u\n", delta);
-
-        if (dm->caret.modelPos.pos.y > 0) {
-            PassPrev(&(dm->caret.modelPos), delta);
-            Scroll(hwnd, dm, delta, UP, rectangle);
-        }
-    }
-
-    void CaretPageDown(HWND hwnd, DisplayedModel* dm, RECT* rectangle) {
-        assert(dm && rectangle);
-
-        size_t delta;
-        size_t linePos = dm->caret.modelPos.pos.y;
+        size_t linePos, delta;
 
         switch(dm->mode) {
         case FORMAT_MODE_DEFAULT:
@@ -913,11 +911,42 @@ static void UpdateVerticalSB_Wrap(HWND hwnd, DisplayedModel* dm) {
             return;
         }
 
-        if (dm->clientArea.lines == 1) {
-            delta = 1;
+        if (dm->clientArea.lines > 1) {
+            delta = min(DECREMENT_OF(dm->clientArea.lines - 1), dm->scrollBars.vertical.pos);
         } else {
+            delta = 1;
+        }
+
+        if (dm->caret.modelPos.pos.y > 0) {
+            PassPrev(&(dm->caret.modelPos), delta);
+            Scroll(hwnd, dm, delta, UP, rectangle);
+        }
+    }
+
+    void CaretPageDown(HWND hwnd, DisplayedModel* dm, RECT* rectangle) {
+        assert(dm && rectangle);
+        assert(dm->scrollBars.vertical.maxPos - dm->scrollBars.vertical.pos);
+
+        size_t linePos, delta;
+
+        switch(dm->mode) {
+        case FORMAT_MODE_DEFAULT:
+            linePos = dm->caret.modelPos.pos.y;
+            break;
+
+        case FORMAT_MODE_WRAP:
+            linePos = dm->caret.linePos;
+            break;
+
+        default:
+            return;
+        }
+
+        if (dm->clientArea.lines > 1) {
             delta = min(DECREMENT_OF(dm->clientArea.lines - 1),
-                            dm->scrollBars.vertical.maxPos - dm->scrollBars.vertical.pos);
+                        dm->scrollBars.vertical.maxPos - dm->scrollBars.vertical.pos);
+        } else {
+            delta = 1;
         }
 
         if (linePos - dm->caret.clientPos.y + delta <= dm->scrollBars.vertical.maxPos) {
