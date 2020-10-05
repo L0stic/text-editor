@@ -192,6 +192,13 @@ size_t Scroll(HWND hwnd, DisplayedModel* dm, size_t scrollValue, Direction dir, 
     void FindLeftEnd_Default(HWND hwnd, DisplayedModel* dm, RECT* rectangle);
 
     /**
+     * Finds end position (FORMAT_MODE_WRAP) to the left.
+     * IN:
+     * @param dm - pointer to a DisplayModel object
+     */
+    void FindLeftEnd_Wrap(DisplayedModel* dm);
+
+    /**
      * Finds home position (FORMAT_MODE_DEFAULT) to the right.
      * IN:
      * @param hwnd - a handle to a window
@@ -258,9 +265,7 @@ size_t Scroll(HWND hwnd, DisplayedModel* dm, size_t scrollValue, Direction dir, 
     /**
      * Moves the caret to the left (FORMAT_MODE_WRAP).
      * IN:
-     * @param hwnd - a handle to a window
      * @param dm - pointer to a DisplayModel object
-     * @param rectangle - pointer to rectangle (will be invalidate)
      */
     void CaretMoveToLeft_Wrap(DisplayedModel* dm);
 
@@ -277,9 +282,7 @@ size_t Scroll(HWND hwnd, DisplayedModel* dm, size_t scrollValue, Direction dir, 
     /**
      * Moves the caret to the right (FORMAT_MODE_WRAP).
      * IN:
-     * @param hwnd - a handle to a window
      * @param dm - pointer to a DisplayModel object
-     * @param rectangle - pointer to rectangle (will be invalidate)
      */
     void CaretMoveToRight_Wrap(DisplayedModel* dm);
 

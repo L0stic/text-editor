@@ -123,7 +123,7 @@ static int SetWindowTitle(HWND hwnd, PSTR* oldTitle, const char* title) {
     static const char* splitter = " - ";
 
     PSTR pstrTitle = (PSTR)calloc(_MAX_FNAME + _MAX_EXT, sizeof(char));
-    
+
     if (!pstrTitle) {
         PrintError(NULL, ERR_NOMEM, __FILE__, __LINE__);
         return ERR_NOMEM;
@@ -184,7 +184,7 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
             break;
         }
 
-        #ifndef DEBUG // ==============================================/
+        #ifndef NDEBUG // ==============================================/
             PrintDocumentParameters(NULL, doc);
             // PrintDocument(NULL, doc);
         #endif // =====================================================/
@@ -199,7 +199,7 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
     case WM_COMMAND:
         switch (LOWORD(wParam)) {
         case IDM_FILE_OPEN:
-            #ifndef DEBUG // ==================/
+            #ifndef NDEBUG // ==================/
                 printf("Open is activated\n");
             #endif // =========================/
 
@@ -225,15 +225,15 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
                         PostMessage(hwnd, WM_CLOSE, 0, 0);
                         break;
                     }
-                    
-                    #ifndef DEBUG // ==============================================/
+
+                    #ifndef NDEBUG // ==============================================/
                         PrintDocumentParameters(NULL, doc);
                         // PrintDocument(NULL, doc);
                     #endif // =====================================================/
                     CoverDocument(hwnd, &dm, doc);
                 }
 
-                #ifndef DEBUG // ==============================================/
+                #ifndef NDEBUG // ==============================================/
                     // printf("%s %s\n", pstrFilename, ofn.lpstrFile);
                     // printf("%s\n", ofn.lpstrFileTitle);
                 #endif // =====================================================/
@@ -246,7 +246,7 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
             break;
 
         case IDM_FILE_EXIT:
-            #ifndef DEBUG // ==================/
+            #ifndef NDEBUG // ==================/
                 printf("Exit is activated\n");
             #endif // =========================/
 
@@ -289,7 +289,7 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
 
     case WM_SIZE:
         UpdateDisplayedModel(hwnd, &dm, lParam);
-        
+
         #ifdef CARET_ON
             if(hwnd == GetFocus()) { CaretSetPos(&dm); }
         #endif
@@ -302,7 +302,7 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
         CaretCreate(hwnd, &dm);
         break;
     // WM_SETFOCUS
-    
+
     case WM_KILLFOCUS:
         // hide and destroy the caret
         CaretDestroy(hwnd);
@@ -315,7 +315,7 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
         SelectObject(hdc, GetStockObject(SYSTEM_FIXED_FONT));
 
         DisplayModel(hdc, &dm);
-        
+
         EndPaint(hwnd, &ps);
         break;
     // WM_PAINT
@@ -334,7 +334,7 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
                 Scroll(hwnd, &dm, 1, LEFT, &rectangle);
             #endif
             break;
-        
+
         case SB_LINEDOWN:
             #ifdef CARET_ON
                 scrollValue = Scroll(hwnd, &dm, 1, RIGHT, &rectangle);
@@ -345,7 +345,7 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
                 Scroll(hwnd, &dm, 1, RIGHT, &rectangle);
             #endif
             break;
-        
+
         case SB_PAGEUP:
             #ifndef CARET_ON
                 Scroll(hwnd, &dm, dm.clientArea.chars, LEFT, &rectangle);
@@ -357,10 +357,10 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
                 Scroll(hwnd, &dm, dm.clientArea.chars, RIGHT, &rectangle);
             #endif
             break;
-        
+
         case SB_THUMBTRACK: {
             size_t absolutePos = GetAbsolutePos(HIWORD(wParam), dm.scrollBars.horizontal.maxPos);
-            
+
             if (dm.scrollBars.horizontal.pos > absolutePos) {
                 #ifdef CARET_ON
                     scrollValue = Scroll(hwnd, &dm, dm.scrollBars.horizontal.pos - absolutePos, LEFT, &rectangle);
@@ -402,7 +402,7 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
             case FORMAT_MODE_WRAP:
                 numLines = dm.caret.linePos;
                 break;
-                
+
             default:
                 break;
             }
@@ -445,7 +445,7 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
 
         case SB_THUMBTRACK: {
             size_t absolutePos = GetAbsolutePos(HIWORD(wParam), dm.scrollBars.vertical.maxPos);
-            
+
             if (dm.scrollBars.vertical.pos > absolutePos) {
                 #ifdef CARET_ON
                     scrollValue = Scroll(hwnd, &dm, dm.scrollBars.vertical.pos - absolutePos, UP, &rectangle);
@@ -465,7 +465,7 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
                 #else
                     Scroll(hwnd, &dm, absolutePos - dm.scrollBars.vertical.pos, DOWN, &rectangle);
                 #endif
-            } 
+            }
             break;
         }
         default:
@@ -479,11 +479,13 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
     // WM_VSCROLL
 
     case WM_KEYDOWN:
+        #ifdef CARET_ON
+            FindCaret(hwnd, &dm, &rectangle);
+        #endif
+
         switch (wParam) {
         case VK_UP:
             #ifdef CARET_ON
-                FindCaret(hwnd, &dm, &rectangle);
-
                 switch (dm.mode) {
                 case FORMAT_MODE_DEFAULT:
                     if (dm.caret.modelPos.pos.y > 0) {
@@ -494,7 +496,7 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
                         }
                     }
                     break;
-                    
+
                 case FORMAT_MODE_WRAP:
                     if (dm.caret.linePos > 0) {
                         CaretMoveToTop_Wrap(hwnd, &dm, &rectangle);
@@ -511,8 +513,6 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
 
         case VK_DOWN:
             #ifdef CARET_ON
-                FindCaret(hwnd, &dm, &rectangle);
-
                 switch (dm.mode) {
                 case FORMAT_MODE_DEFAULT:
                     if (dm.caret.modelPos.pos.y < DECREMENT_OF(dm.documentArea.lines)) {
@@ -523,7 +523,7 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
                         }
                     }
                     break;
-                    
+
                 case FORMAT_MODE_WRAP:
                     if (dm.caret.linePos < DECREMENT_OF(dm.wrapModel.lines)) {
                         CaretMoveToBottom_Wrap(hwnd, &dm, &rectangle);
@@ -540,22 +540,20 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
 
         case VK_LEFT:
             #ifdef CARET_ON
-                FindCaret(hwnd, &dm, &rectangle);
-
                 switch (dm.mode) {
                 case FORMAT_MODE_DEFAULT:
                     if (dm.caret.modelPos.pos.x > 0) {
                         CaretMoveToLeft_Default(hwnd, &dm, &rectangle);
-                    } else if (dm.caret.modelPos.pos.y > 0) {    
+                    } else if (dm.caret.modelPos.pos.y > 0) {
                         CaretMoveToTop_Default(hwnd, &dm, &rectangle);
                         FindRightEnd_Default(hwnd, &dm, &rectangle);
                     }
                     break;
-                    
+
                 case FORMAT_MODE_WRAP:
                     if (dm.caret.clientPos.x > 0) {
                         CaretMoveToLeft_Wrap(&dm);
-                    } else if (dm.caret.linePos > 0) {    
+                    } else if (dm.caret.linePos > 0) {
                         CaretMoveToTop_Wrap(hwnd, &dm, &rectangle);
                         FindRightEnd_Wrap(&dm);
                     }
@@ -571,23 +569,21 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
 
         case VK_RIGHT:
             #ifdef CARET_ON
-                FindCaret(hwnd, &dm, &rectangle);
-
                 switch (dm.mode) {
                 case FORMAT_MODE_DEFAULT:
                     if (dm.caret.modelPos.pos.x < dm.caret.modelPos.block->data.len) {
                         CaretMoveToRight_Default(hwnd, &dm, &rectangle);
-                    } else if (dm.caret.modelPos.pos.y < DECREMENT_OF(dm.documentArea.lines)) {                    
+                    } else if (dm.caret.modelPos.pos.y < DECREMENT_OF(dm.documentArea.lines)) {
                         CaretMoveToBottom_Default(hwnd, &dm, &rectangle);
                         if (dm.caret.modelPos.pos.x) { FindHome_Default(hwnd, &dm, &rectangle); }
                     }
                     break;
-                    
+
                 case FORMAT_MODE_WRAP:
                     if (dm.caret.modelPos.pos.x < dm.caret.modelPos.block->data.len
                         && dm.caret.clientPos.x < dm.clientArea.chars) {
                         CaretMoveToRight_Wrap(&dm);
-                    } else if (dm.caret.linePos < DECREMENT_OF(dm.wrapModel.lines)) {                    
+                    } else if (dm.caret.linePos < DECREMENT_OF(dm.wrapModel.lines)) {
                         CaretMoveToBottom_Wrap(hwnd, &dm, &rectangle);
                         if (dm.caret.clientPos.x) { FindHome_Wrap(&dm); }
                     }
@@ -604,11 +600,25 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
 
         case VK_PRIOR:
             #ifdef CARET_ON
-                // if (dm.mode == FORMAT_MODE_WRAP) { break; }
+                if (dm.mode != FORMAT_MODE_DEFAULT) { break; }
 
-                // FindCaret(hwnd, &dm, &rectangle);
-                // CaretPageUp(hwnd, &dm, &rectangle);
-                // FindLeftEnd_Default(hwnd, &dm, &rectangle);
+                if (dm.scrollBars.vertical.pos > 0) {
+                    CaretPageUp(hwnd, &dm, &rectangle);
+
+                    switch (dm.mode) {
+                    case FORMAT_MODE_DEFAULT:
+                        if (dm.caret.modelPos.pos.x > dm.caret.modelPos.block->data.len) {
+                            FindLeftEnd_Default(hwnd, &dm, &rectangle);
+                        }
+                        break;
+
+                    case FORMAT_MODE_WRAP:
+                        FindLeftEnd_Wrap(&dm);
+                        break;
+                    default:
+                        break;
+                    }
+                }
             #else
                 PostMessage(hwnd, WM_VSCROLL, SB_PAGEUP, (LPARAM)0);
             #endif
@@ -616,11 +626,25 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
 
         case VK_NEXT:
             #ifdef CARET_ON
-                // if (dm.mode == FORMAT_MODE_WRAP) { break; }
+                if (dm.mode != FORMAT_MODE_DEFAULT) { break; }
 
-                // FindCaret(hwnd, &dm, &rectangle);
-                // CaretPageDown(hwnd, &dm, &rectangle);
-                // FindLeftEnd_Default(hwnd, &dm, &rectangle);
+                if (dm.scrollBars.vertical.maxPos - dm.scrollBars.vertical.pos > 0) {
+                    CaretPageDown(hwnd, &dm, &rectangle);
+
+                    switch (dm.mode) {
+                    case FORMAT_MODE_DEFAULT:
+                        if (dm.caret.modelPos.pos.x > dm.caret.modelPos.block->data.len) {
+                            FindLeftEnd_Default(hwnd, &dm, &rectangle);
+                        }
+                        break;
+
+                    case FORMAT_MODE_WRAP:
+                        FindLeftEnd_Wrap(&dm);
+                        break;
+                    default:
+                        break;
+                    }
+                }
             #else
                 PostMessage(hwnd, WM_VSCROLL, SB_PAGEDOWN, (LPARAM)0);
             #endif
@@ -628,13 +652,11 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
 
         case VK_HOME:
             #ifdef CARET_ON
-                FindCaret(hwnd, &dm, &rectangle);
-
                 switch (dm.mode) {
                 case FORMAT_MODE_DEFAULT:
                     if (dm.caret.modelPos.pos.x) { FindHome_Default(hwnd, &dm, &rectangle); }
                     break;
-                    
+
                 case FORMAT_MODE_WRAP:
                     if (dm.caret.clientPos.x) { FindHome_Wrap(&dm); }
                     break;
@@ -648,13 +670,11 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
 
         case VK_END:
             #ifdef CARET_ON
-                FindCaret(hwnd, &dm, &rectangle);
-
                 switch (dm.mode) {
                 case FORMAT_MODE_DEFAULT:
                     FindRightEnd_Default(hwnd, &dm, &rectangle);
                     break;
-                    
+
                 case FORMAT_MODE_WRAP:
                     FindRightEnd_Wrap(&dm);
                     break;
@@ -666,25 +686,28 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
                 PostMessage(hwnd, WM_HSCROLL, SB_PAGEDOWN, (LPARAM)0);
             #endif
             break;
-        
-        case VK_DELETE:
-            #ifdef CARET_ON
-                FindCaret(hwnd, &dm, &rectangle);
 
-                HideCaret(hwnd);
+        #ifdef CARET_ON
+            case VK_DELETE:
+                    HideCaret(hwnd);
 
-                if (dm.caret.modelPos.block->data.len && dm.caret.modelPos.pos.x < dm.caret.modelPos.block->data.len) {
-                    CaretDeleteChar(hwnd, &dm);
-                } else if (dm.caret.modelPos.block->next) {
-                    CaretDeleteBlock(hwnd, &dm);
-                }
+                    if (dm.caret.modelPos.block->data.len && dm.caret.modelPos.pos.x < dm.caret.modelPos.block->data.len) {
+                        CaretDeleteChar(hwnd, &dm);
+                    } else if (dm.caret.modelPos.block->next) {
+                        CaretDeleteBlock(hwnd, &dm);
+                    }
 
-                InvalidateRect(hwnd, NULL, TRUE);
-                UpdateWindow(hwnd);
+                    InvalidateRect(hwnd, NULL, TRUE);
+                    UpdateWindow(hwnd);
 
-                ShowCaret(hwnd);
-            #endif
-            break;
+                    ShowCaret(hwnd);
+
+                    #ifndef NDEBUG // ======================= /
+                        PrintDocumentParameters(NULL, doc);
+                    #endif // =============================== /
+                break;
+            // VK_DELETE
+        #endif
 
         default:
             break;
@@ -700,11 +723,14 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
     #ifdef CARET_ON
     case WM_CHAR:
         FindCaret(hwnd, &dm, &rectangle);
-        
+
         for(int i = 0; i < (int) LOWORD(lParam); i++) {
             switch(wParam) {
             case '\b' : // backspace
                 if(dm.caret.modelPos.pos.y || dm.caret.modelPos.pos.x) {
+                    if (dm.caret.modelPos.pos.x && !dm.caret.clientPos.x) {
+                        SendMessage(hwnd, WM_KEYDOWN, VK_LEFT, 1L);
+                    }
                     SendMessage(hwnd, WM_KEYDOWN, VK_LEFT, 1L);
                     SendMessage(hwnd, WM_KEYDOWN, VK_DELETE, 1L);
                 }
@@ -717,7 +743,7 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
                         SendMessage(hwnd, WM_CHAR, ' ', 1L);
                     } while(dm.caret.modelPos.pos.x % 8 != 0);
                     break;
-                    
+
                 case FORMAT_MODE_WRAP:
                     do {
                         SendMessage(hwnd, WM_CHAR, ' ', 1L);
@@ -733,17 +759,36 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
                 printf("line feed\n");
                 break;
 
-            case '\r' : // carriage return
+            case '\r' : { // carriage return
+                int flag = 0;
+                
                 HideCaret(hwnd);
 
                 CaretAddBlock(hwnd, &dm);
 
+                printf("%u\n", DIV_WITH_ROUND_UP(dm.caret.modelPos.pos.x, dm.clientArea.chars));
+
+                // TODO: fix this because it's not good
+                if (dm.mode == FORMAT_MODE_WRAP && dm.caret.modelPos.pos.x >= dm.clientArea.chars
+                    && (!dm.caret.clientPos.x || dm.caret.clientPos.x == dm.clientArea.chars)) {
+                    flag = 1;
+                }
+
                 PostMessage(hwnd, WM_KEYDOWN, VK_RIGHT, (LPARAM)0);
+
+                if (flag) {
+                    --dm.caret.clientPos.y;
+                }
 
                 InvalidateRect(hwnd, NULL, TRUE);
                 UpdateWindow(hwnd);
 
                 ShowCaret(hwnd);
+
+                #ifndef NDEBUG // ======================= /
+                    PrintDocumentParameters(NULL, doc);
+                #endif // =============================== /
+            }
                 break;
 
             default : // character codes
@@ -757,17 +802,17 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
                 case FORMAT_MODE_DEFAULT:
                     if (dm.caret.modelPos.pos.x < dm.caret.modelPos.block->data.len) {
                         CaretMoveToRight_Default(hwnd, &dm, &rectangle);
-                    } else if (dm.caret.modelPos.pos.y < DECREMENT_OF(dm.documentArea.lines)) {                    
+                    } else if (dm.caret.modelPos.pos.y < DECREMENT_OF(dm.documentArea.lines)) {
                         CaretMoveToBottom_Default(hwnd, &dm, &rectangle);
                         if (dm.caret.modelPos.pos.x) { FindHome_Default(hwnd, &dm, &rectangle); }
                     }
                     break;
-                    
+
                 case FORMAT_MODE_WRAP:
                     if (dm.caret.modelPos.pos.x < dm.caret.modelPos.block->data.len
                         && dm.caret.clientPos.x < dm.clientArea.chars) {
                         CaretMoveToRight_Wrap(&dm);
-                    } else if (dm.caret.linePos < DECREMENT_OF(dm.wrapModel.lines)) {                    
+                    } else if (dm.caret.linePos < DECREMENT_OF(dm.wrapModel.lines)) {
                         CaretMoveToBottom_Wrap(hwnd, &dm, &rectangle);
                         if (dm.caret.clientPos.x) { FindHome_Wrap(&dm); }
                         CaretMoveToRight_Wrap(&dm);
@@ -783,15 +828,15 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
 
                 ShowCaret(hwnd);
 
-                // PrintDocumentParameters(NULL, doc);
+                #ifndef NDEBUG // ======================= /
+                    PrintDocumentParameters(NULL, doc);
+                #endif // =============================== /
                 break;
             }
         }
 
-        #ifdef CARET_ON
-            // CaretPrintParams(&dm);
-            CaretSetPos(&dm);
-        #endif
+        // CaretPrintParams(&dm);
+        CaretSetPos(&dm);
         break;
     // WM_CHAR
     #endif

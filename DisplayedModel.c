@@ -64,7 +64,7 @@ static void PassNext(ModelPos* modelPos, size_t delta) {
     }
 }
 
-#ifndef DEBUG // ======================================= /
+#ifndef NDEBUG // ======================================= /
     static void PrintWrapModel(const WrapModel* wrapModel) {
         if (wrapModel->isValid) {
             printf("Wrap model: %u\n", wrapModel->lines);
@@ -89,7 +89,7 @@ static void CountLines(Block* startBlock, const Block* lastBlock, DisplayedModel
 
 static size_t BuildWrapModel(HWND hwnd, DisplayedModel* dm) {
     assert(dm);
-    #ifndef DEBUG // ================================/
+    #ifndef NDEBUG // ================================/
         // printf("BuildWrapModel\n");
     #endif
 
@@ -145,7 +145,7 @@ static size_t BuildWrapModel(HWND hwnd, DisplayedModel* dm) {
     return absolutePos;
 }
 
-#ifndef DEBUG // ======================================= /
+#ifndef NDEBUG // ======================================= /
     static void PrintSBs(const DisplayedModel* dm) {
         assert(dm);
 
@@ -158,7 +158,7 @@ static size_t BuildWrapModel(HWND hwnd, DisplayedModel* dm) {
 #endif // ============================================== /
 
 void CoverDocument(HWND hwnd, DisplayedModel* dm, Document* doc) {
-    #ifndef DEBUG // ================================/
+    #ifndef NDEBUG // ================================/
         // printf("Cover document\n");
     #endif // =======================================/
     assert(dm && doc);
@@ -190,7 +190,7 @@ void CoverDocument(HWND hwnd, DisplayedModel* dm, Document* doc) {
     case FORMAT_MODE_WRAP:
         BuildWrapModel(hwnd, dm);
 
-        #ifndef DEBUG // ================================/
+        #ifndef NDEBUG // ================================/
             // PrintWrapModel(&(dm->wrapModel));
         #endif // =======================================/
 
@@ -205,12 +205,12 @@ void CoverDocument(HWND hwnd, DisplayedModel* dm, Document* doc) {
     SetRelativeParam(hwnd, &(dm->scrollBars.horizontal), SB_HORZ);
     SetRelativeParam(hwnd, &(dm->scrollBars.vertical), SB_VERT);
 
-    #ifndef DEBUG // ================================/
+    #ifndef NDEBUG // ================================/
         // PrintSBs(dm);
     #endif // =======================================/
 }
 
-#ifndef DEBUG // ======================================= /
+#ifndef NDEBUG // ======================================= /
     static void PrintPos(const DisplayedModel* dm) {
         assert(dm);
         printf("blockPos = %u, ", dm->scrollBars.modelPos.pos.y);
@@ -262,7 +262,7 @@ void DisplayModel(HDC hdc, const DisplayedModel* dm) {
     size_t linesBlock, nextLine;
     size_t delta;
 
-    #ifndef DEBUG // ================================/
+    #ifndef NDEBUG // ================================/
         // printf("Display model:\n");
         // printf("\tHorizontal\n");
         // PrintScrollBar(&(dm->scrollBars.horizontal));
@@ -534,7 +534,7 @@ size_t Scroll(HWND hwnd, DisplayedModel* dm, size_t count, Direction direction, 
     InvalidateRect(hwnd, rectangle, TRUE);
     UpdateWindow(hwnd);
 
-    #ifndef DEBUG // ==============================================/
+    #ifndef NDEBUG // ==============================================/
         // PrintPos(dm);
         // PrintScrollBar(&(dm->scrollBars.vertical));
         // PrintScrollBar(&(dm->scrollBars.horizontal));
@@ -691,6 +691,16 @@ static void UpdateVerticalSB_Wrap(HWND hwnd, DisplayedModel* dm) {
         }
 
         dm->caret.modelPos.pos.x = dm->caret.modelPos.block->data.len;
+    }
+
+    void FindLeftEnd_Wrap(DisplayedModel* dm) {
+        assert(dm);
+        size_t deltaModel = dm->caret.modelPos.pos.x - dm->caret.modelPos.block->data.len;
+
+        if (dm->caret.modelPos.pos.x > dm->caret.modelPos.block->data.len) {
+            dm->caret.modelPos.pos.x = dm->caret.modelPos.block->data.len;
+            dm->caret.clientPos.x = dm->caret.modelPos.block->data.len % dm->clientArea.chars;
+        }
     }
 
     void FindRightEnd_Default(HWND hwnd, DisplayedModel* dm, RECT* rectangle) {
@@ -884,21 +894,9 @@ static void UpdateVerticalSB_Wrap(HWND hwnd, DisplayedModel* dm) {
 
     void CaretPageUp(HWND hwnd, DisplayedModel* dm, RECT* rectangle) {
         assert(dm && rectangle);
+        assert(dm->scrollBars.vertical.pos);
 
-        size_t delta = min(DECREMENT_OF(dm->clientArea.lines - 1), dm->scrollBars.vertical.pos);
-        printf("%u\n", delta);
-
-        if (dm->caret.modelPos.pos.y > 0) {
-            PassPrev(&(dm->caret.modelPos), delta);
-            Scroll(hwnd, dm, delta, UP, rectangle);
-        }
-    }
-
-    void CaretPageDown(HWND hwnd, DisplayedModel* dm, RECT* rectangle) {
-        assert(dm && rectangle);
-
-        size_t delta;
-        size_t linePos = dm->caret.modelPos.pos.y;
+        size_t linePos, delta;
 
         switch(dm->mode) {
         case FORMAT_MODE_DEFAULT:
@@ -913,11 +911,42 @@ static void UpdateVerticalSB_Wrap(HWND hwnd, DisplayedModel* dm) {
             return;
         }
 
-        if (dm->clientArea.lines == 1) {
-            delta = 1;
+        if (dm->clientArea.lines > 1) {
+            delta = min(DECREMENT_OF(dm->clientArea.lines - 1), dm->scrollBars.vertical.pos);
         } else {
+            delta = 1;
+        }
+
+        if (dm->caret.modelPos.pos.y > 0) {
+            PassPrev(&(dm->caret.modelPos), delta);
+            Scroll(hwnd, dm, delta, UP, rectangle);
+        }
+    }
+
+    void CaretPageDown(HWND hwnd, DisplayedModel* dm, RECT* rectangle) {
+        assert(dm && rectangle);
+        assert(dm->scrollBars.vertical.maxPos - dm->scrollBars.vertical.pos);
+
+        size_t linePos, delta;
+
+        switch(dm->mode) {
+        case FORMAT_MODE_DEFAULT:
+            linePos = dm->caret.modelPos.pos.y;
+            break;
+
+        case FORMAT_MODE_WRAP:
+            linePos = dm->caret.linePos;
+            break;
+
+        default:
+            return;
+        }
+
+        if (dm->clientArea.lines > 1) {
             delta = min(DECREMENT_OF(dm->clientArea.lines - 1),
-                            dm->scrollBars.vertical.maxPos - dm->scrollBars.vertical.pos);
+                        dm->scrollBars.vertical.maxPos - dm->scrollBars.vertical.pos);
+        } else {
+            delta = 1;
         }
 
         if (linePos - dm->caret.clientPos.y + delta <= dm->scrollBars.vertical.maxPos) {
@@ -1060,6 +1089,21 @@ static void UpdateVerticalSB_Wrap(HWND hwnd, DisplayedModel* dm) {
         }
     }
 
+    static size_t FindPos(Fragment** fragment, size_t* delta) {
+        assert(fragment && *fragment);
+        assert(delta);
+
+        size_t counter = 0;
+
+        while (*delta > (*fragment)->data.len) {
+            *delta -= (*fragment)->data.len;
+            *fragment = (*fragment)->next;
+
+            ++counter;
+        }
+
+        return counter;
+    }
 
     static int SplitFragment(ListFragment* fragments, Fragment* prevFragment, size_t delta) {
         FragmentData_t fragmentData = { prevFragment->data.len - delta, prevFragment->data.pos + delta };
@@ -1081,7 +1125,6 @@ static void UpdateVerticalSB_Wrap(HWND hwnd, DisplayedModel* dm) {
         Fragment* newFragment = NULL;
         FragmentData_t fragmentData = {1, dm->doc->text->len};
 
-
         if (AddChar(dm->doc->text, c) < 0) {
             PrintError(NULL, ERR_NOMEM, __FILE__, __LINE__);
             return ERR_NOMEM;
@@ -1089,10 +1132,7 @@ static void UpdateVerticalSB_Wrap(HWND hwnd, DisplayedModel* dm) {
 
         // find place
         size_t delta = dm->caret.modelPos.pos.x;
-        while (delta > fragment->data.len) {
-            delta -= fragment->data.len;
-            fragment = fragment->next;
-        }
+        FindPos(&fragment, &delta);
 
         // split
         if (delta && delta < fragment->data.len) {
@@ -1109,31 +1149,17 @@ static void UpdateVerticalSB_Wrap(HWND hwnd, DisplayedModel* dm) {
         if (!fragment->data.len) {
             ++fragment->data.len;
             fragment->data.pos = dm->doc->text->len - 1;
+        } else if (delta == fragment->data.len && dm->doc->text->len == (fragment->data.pos + fragment->data.len + 1)) {
+            ++fragment->data.len;
         } else {
-            if (!delta) {
-                newFragment = CreateFragment(NULL, &fragmentData);
+            newFragment = CreateFragment(!delta ? NULL : fragment, &fragmentData);
 
-                if (!newFragment) {
-                    --dm->doc->text->len;
-                    dm->doc->text->data[dm->doc->text->len] = '\0';
+            if (!newFragment) {
+                --dm->doc->text->len;
+                dm->doc->text->data[dm->doc->text->len] = '\0';
 
-                    PrintError(NULL, ERR_NOMEM, __FILE__, __LINE__);
-                    return ERR_NOMEM;
-                }
-            } else if (delta == fragment->data.len) {
-                if (dm->doc->text->len == fragment->data.pos + fragment->data.len) {
-                    ++fragment->data.len;
-                } else {
-                    newFragment = CreateFragment(fragment, &fragmentData);
-
-                    if (!newFragment) {
-                        --dm->doc->text->len;
-                        dm->doc->text->data[dm->doc->text->len] = '\0';
-
-                        PrintError(NULL, ERR_NOMEM, __FILE__, __LINE__);
-                        return ERR_NOMEM;
-                    }
-                }
+                PrintError(NULL, ERR_NOMEM, __FILE__, __LINE__);
+                return ERR_NOMEM;
             }
 
             InsertFragments(fragments, newFragment);
@@ -1171,28 +1197,20 @@ static void UpdateVerticalSB_Wrap(HWND hwnd, DisplayedModel* dm) {
     int CaretAddBlock(HWND hwnd, DisplayedModel* dm) {
         assert(dm);
         int isSplitted = 0;
-        int isChangeLen;
 
-        // prepare
+        ListFragment* fragments = dm->caret.modelPos.block->data.fragments;
+        Fragment* fragment = fragments->nodes;
+
         ListFragment* newFragments = CreateListFragment();
+        Fragment* newFragment;
         if (!newFragments) {
             PrintError(NULL, ERR_NOMEM, __FILE__, __LINE__);
             return ERR_NOMEM;
         }
 
-        ListFragment* fragments = dm->caret.modelPos.block->data.fragments;
-        Fragment* fragment = fragments->nodes;
-        Fragment* newFragment;
-
         // find place
         size_t delta = dm->caret.modelPos.pos.x;
-        size_t counter = 0;
-        while (delta > fragment->data.len) {
-            delta -= fragment->data.len;
-            fragment = fragment->next;
-
-            ++counter;
-        }
+        size_t countPassFragments = FindPos(&fragment, &delta);
 
         if (delta && delta < fragment->data.len) {
             // split
@@ -1204,9 +1222,11 @@ static void UpdateVerticalSB_Wrap(HWND hwnd, DisplayedModel* dm) {
 
             newFragment = fragment->next;
             isSplitted = 1;
+            ++countPassFragments;
         } else if (delta == fragment->data.len && fragment->next) {
             newFragment = fragment->next;
             isSplitted = 1;
+            ++countPassFragments;
         } else {
             FragmentData_t fragmentData = { 0, dm->doc->text->len };
             newFragment = CreateFragment(NULL, &fragmentData);
@@ -1220,18 +1240,16 @@ static void UpdateVerticalSB_Wrap(HWND hwnd, DisplayedModel* dm) {
 
         // insert
         Block* block = dm->caret.modelPos.block;
-        Block* newBlock;
         BlockData_t blockData = { 0, newFragments };
-        isChangeLen = block->data.len == dm->documentArea.chars;
+        int isChangeLen = block->data.len == dm->documentArea.chars;
 
-        blockData.fragments = newFragments;
         if (isSplitted) {
             blockData.len = block->data.len - dm->caret.modelPos.pos.x;
         } else if (!delta) {
             block = block->prev;
         }
 
-        newBlock = CreateBlock(block, &blockData);
+        Block* newBlock = CreateBlock(block, &blockData);
 
         if (!newBlock) {
             DestroyListFragment(&newFragments);
@@ -1243,10 +1261,9 @@ static void UpdateVerticalSB_Wrap(HWND hwnd, DisplayedModel* dm) {
 
         if (isSplitted) {
             newFragment->prev = NULL;
-            newFragments->len = fragments->len - counter;
 
             fragment->next = NULL;
-            fragments->len = counter;
+            fragments->len = countPassFragments;
 
             block->data.len = dm->caret.modelPos.pos.x;
         } else if (!delta) {
@@ -1266,6 +1283,7 @@ static void UpdateVerticalSB_Wrap(HWND hwnd, DisplayedModel* dm) {
                     break;
                 }
             }
+            
             dm->caret.modelPos.block = newBlock;
         }
 
@@ -1310,24 +1328,18 @@ static void UpdateVerticalSB_Wrap(HWND hwnd, DisplayedModel* dm) {
         ListFragment* fragments = dm->caret.modelPos.block->data.fragments;
         Fragment* fragment = fragments->nodes;
 
-        // TODO: simplify text
-
         // find place
         size_t delta = dm->caret.modelPos.pos.x;
-        while (delta > fragment->data.len) {
-            delta -= fragment->data.len;
-            fragment = fragment->next;
-        }
+        FindPos(&fragment, &delta);
 
         // split
-        if (delta && delta < fragment->data.len) {
-            if (SplitFragment(fragments, fragment, delta)) {
+        if (delta) {
+            if (delta < fragment->data.len && SplitFragment(fragments, fragment, delta)) {
                 PrintError(NULL, ERR_NOMEM, __FILE__, __LINE__);
                 return ERR_NOMEM;
             }
 
-            fragment = fragment->next;
-        } else if (delta == fragment->data.len) {
+            assert (fragment->next);
             fragment = fragment->next;
         }
 
@@ -1429,7 +1441,7 @@ void SwitchMode(HWND hwnd, DisplayedModel* dm, FormatMode mode) {
     // printf("Switch mode\n");
     assert(dm);
 
-    #ifndef DEBUG // ====/
+    #ifndef NDEBUG // ====/
         // PrintPos(dm);
     #endif // ===========/
 
@@ -1523,7 +1535,7 @@ void SwitchMode(HWND hwnd, DisplayedModel* dm, FormatMode mode) {
     SetRelativeParam(hwnd, &(dm->scrollBars.horizontal), SB_HORZ);
     SetRelativeParam(hwnd, &(dm->scrollBars.vertical), SB_VERT);
 
-    #ifndef DEBUG // ====/
+    #ifndef NDEBUG // ====/
         // PrintPos(dm);
     #endif // ===========/
 }
