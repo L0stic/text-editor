@@ -30,7 +30,6 @@
 *.dylib
 
 # Executables
-*.exe
 *.out
 *.app
 *.i*86
@@ -57,7 +56,6 @@ dkms.conf
 *.layout
 *.depend
 # generated directories
-bin/
 obj/
 
 ### VisualStudioCode ###
